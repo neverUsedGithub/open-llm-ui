@@ -1,0 +1,42 @@
+{
+  "name": "open-llm-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.25",
+    "lucide-solid": "^0.545.0",
+    "ollama": "^0.6.0",
+    "pdfjs-dist": "^5.4.296",
+    "solid-js": "^1.9.9",
+    "streaming-markdown": "^0.2.15",
+    "tailwind-merge": "^3.3.1",
+    "turndown": "^7.2.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^24.6.0",
+    "@types/turndown": "^5.0.5",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.7.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.9.3",
+    "vite": "npm:rolldown-vite@7.1.14",
+    "vite-plugin-solid": "^2.11.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:rolldown-vite@7.1.14"
+    },
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "usearch"
+    ]
+  }
+}

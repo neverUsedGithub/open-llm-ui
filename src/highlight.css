@@ -1,0 +1,81 @@
+:root {
+  --highlight-comment: #919191;
+  --highlight-builtin: #d19525;
+  --highlight-function: #ec4646;
+  --highlight-keyword: #4385cf;
+  --highlight-number: #e75b85;
+  --highlight-string: #14a066;
+
+  --highlight-language-variable: var(--highlight-number);
+  --highlight-attribute: var(--highlight-number);
+  --highlight-literal: var(--highlight-keyword);
+
+  --highlight-class: var(--highlight-function);
+
+  --highlight-html-tag: var(--highlight-keyword);
+  --highlight-html-tagname: #5f9fe7;
+
+  --highlight-meta: var(--highlight-number);
+  --highlight-variable: var(--highlight-number);
+  --highlight-type: var(--highlight-number);
+}
+
+.hljs-comment {
+  color: var(--highlight-comment);
+}
+
+.hljs-built_in {
+  color: var(--highlight-builtin);
+}
+
+.hljs-title.function_ {
+  color: var(--highlight-function);
+}
+
+.hljs-title.class_ {
+  color: var(--highlight-class);
+}
+
+.hljs-keyword {
+  color: var(--highlight-keyword);
+}
+
+.hljs-literal {
+  color: var(--highlight-literal);
+}
+
+.hljs-number {
+  color: var(--highlight-number);
+}
+
+.hljs-string {
+  color: var(--highlight-string);
+}
+
+.hljs-attr {
+  color: var(--highlight-attribute);
+}
+
+.hljs-variable.language_ {
+  color: var(--highlight-language-variable);
+}
+
+.hljs-tag {
+  color: var(--highlight-html-tag);
+}
+
+.hljs-tag > .hljs-name {
+  color: var(--highlight-html-tagname);
+}
+
+.hljs-meta {
+  color: var(--highlight-meta);
+}
+
+.hljs-variable {
+  color: var(--highlight-variable);
+}
+
+.hljs-type {
+  color: var(--highlight-type);
+}

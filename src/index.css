@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "./markdown.css";
+@import "./highlight.css";
+@import "katex/dist/katex.css";
+
+* {
+  box-sizing: border-box;
+}
+
+pre {
+  font-family: inherit;
+}
+
+test {
+  error: #f57070;
+  error-dimmer: #702f2f;
+  error-overlay: #fc5e5e13;
+}
+
+@theme {
+  --color-background: #181818;
+  --color-background-default: #252525;
+  --color-background-higher: #3a3a3a;
+  --color-background-highest: #4f4f4f;
+
+  --color-foreground: #ffffff;
+  --color-foreground-muted: #888888;
+
+  --color-accent-default: #84bbfa;
+  --color-accent-overlay: #3c97ff34;
+
+  --color-error-default: #f57070;
+  --color-error-dimmer: #702f2f;
+  --color-error-overlay: #fc5e5e13;
+
+  --color-border: #3a3a3a;
+
+  --font-handwriting: "Old Standard TT", cursive, serif;
+
+  --default-font-family:
+    ui-sans-serif, -apple-system, system-ui, Segoe UI, Helvetica, Apple Color Emoji, Arial, sans-serif, Segoe UI Emoji,
+    Segoe UI Symbol;
+
+  --animate-beat: beat 2s ease-in-out infinite;
+
+  @keyframes beat {
+    0% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.3);
+    }
+
+    100% {
+      transform: scale(1);
+    }
+  }
+}

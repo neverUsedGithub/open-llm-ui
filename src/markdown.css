@@ -1,0 +1,117 @@
+
+
+.markdown-container {
+  ul {
+    @apply pl-5;
+
+    li {
+      @apply list-disc;
+    }
+  }
+
+  ol {
+    @apply pl-5;
+
+    li {
+      @apply list-decimal;
+    }
+  }
+
+  li {
+    @apply my-1 pl-2;
+  }
+
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  h4 {
+    @apply text-lg;
+  }
+
+  h6 {
+    @apply text-sm;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply my-2;
+  }
+
+  code {
+    @apply bg-background-default text-sm font-mono;
+  }
+
+  pre:has(> code) {
+    @apply bg-background-default my-2 rounded-xl px-4 py-3 whitespace-pre-wrap break-all;
+
+    code {
+      @apply bg-transparent;
+    }
+  }
+
+  a {
+    @apply underline decoration-dotted underline-offset-5;
+  }
+
+  a:hover {
+    @apply text-blue-400;
+  }
+
+  img {
+    @apply my-2 rounded-xl;
+  }
+
+  blockquote {
+    @apply border-background-higher border-l-2 pl-2;
+  }
+
+  hr {
+    @apply text-background-higher my-2;
+  }
+
+  table {
+    @apply w-full;
+  }
+
+  th {
+    @apply text-left font-semibold;
+  }
+
+  th,
+  td {
+    @apply p-2;
+  }
+
+  thead {
+    @apply border-background-higher border-b;
+  }
+
+  tbody > tr:not(:last-child) {
+    @apply border-background-default border-b;
+  }
+
+  p {
+    @apply my-2;
+  }
+
+  >:first-child {
+    @apply mt-0;
+  }
+
+  >:last-child {
+    @apply mb-0;
+  }
+}
