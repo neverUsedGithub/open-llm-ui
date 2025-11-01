@@ -143,6 +143,7 @@ export interface ModelTool {
 
 export interface ToolContext {
   model: string;
+  lastMessage: string;
   documents: RAGDocument[];
 }
 

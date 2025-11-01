@@ -12,8 +12,9 @@ import TriangleAlert from "lucide-solid/icons/triangle-alert";
 import CalculatorIcon from "lucide-solid/icons/calculator";
 import BinaryIcon from "lucide-solid/icons/binary";
 import BookOpenText from "lucide-solid/icons/book-open-text";
-import ollama, { type AbortableAsyncIterator, type ChatResponse, type ShowResponse } from "ollama";
-import { createEffect, createMemo, createSignal, For, getOwner, onMount, runWithOwner, Show } from "solid-js";
+import ollama from "ollama/browser";
+import type { AbortableAsyncIterator, ChatResponse, ShowResponse } from "ollama";
+import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import TurndownService from "turndown";
 import * as streamingMarkdown from "streaming-markdown";
 import "./App.css";
@@ -24,10 +25,9 @@ import { cn } from "@/util/cn";
 import { promptTemplates } from "@/util/constant";
 import { freeOllamaModel } from "@/util/ollama";
 import { buildSystemPrompt } from "@/util/prompt";
-import { Dynamic, Properties } from "solid-js/web";
+import { Dynamic } from "solid-js/web";
 import * as pdfjs from "pdfjs-dist";
 import * as embedding from "@/embedding";
-import * as ocr from "@/ocr";
 import * as vectordb from "@/vectordb";
 import hljs from "highlight.js";
 import { splitText } from "@/util/splitText";
@@ -55,6 +55,7 @@ import { BraveSearchProvider } from "@/search/providers/brave";
 import { extensionApi, isExtensionInstalled } from "@/util/extension";
 import pdfjsWorkerURL from "pdfjs-dist/build/pdf.worker.mjs?url";
 import katex from "katex";
+import { extractPDF } from "./documents/pdf";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerURL;
 
@@ -241,9 +242,12 @@ The file system of the python environment is NOT persistent, it will reset betwe
         const links: { title: string; url: string }[] = [];
 
         const turndown = new TurndownService({
-          headingStyle: "atx",
           hr: "---",
+          headingStyle: "atx",
+          codeBlockStyle: "fenced",
           bulletListMarker: "-",
+          emDelimiter: "_",
+          strongDelimiter: "**",
         });
 
         turndown.remove(["script", "style"]);
@@ -267,14 +271,11 @@ The file system of the python environment is NOT persistent, it will reset betwe
 
         const contentEl =
           dataDOM.querySelector("main") ??
-          dataDOM.querySelector("article") ??
           dataDOM.querySelector('[role="main"]') ??
+          dataDOM.querySelector("article") ??
           dataDOM.body;
 
         const output = turndown.turndown(contentEl);
-
-        // Free main model.
-        await freeOllamaModel(ctx.model);
 
         const summaryModel = "granite4:micro-h";
         const summarized = await ollama.chat({
@@ -286,30 +287,33 @@ The file system of the python environment is NOT persistent, it will reset betwe
           messages: [
             {
               role: "user",
-              content: `Web page content:
----
+              content: `You are an assistant that applies the user's query to a large document.
+
+User query:
+"${properties.query ?? "Summarize this web page."}"
+
+Document:
+\`\`\`markdown
 ${output}
----
+\`\`\`
 
-${properties.query ?? "Summarize this web page."}
+Instructions:
+1. Identify only the information in the document that directly relates to the user's query.
+2. Ignore unrelated content; do not invent answers.
+3. Provide the extracted information in a concise, structured manner suitable for the main model to use.
 
-Provide a concise response based only on the content above. In your response:
-- Enforce a strict 125-character maximum for quotes from any source document. Open Source Software is ok as long as we respect the license.
-- Use quotation marks for exact language from articles; any language outside of the quotation should never be word-for-word the same.
-- You are not a lawyer and never comment on the legality of your own prompts and responses.
-- Never produce or reproduce exact song lyrics.`,
+Output only the extracted information.`,
             },
             { role: "user", content: output },
           ],
         });
 
-        // Free summary model.
-        await freeOllamaModel(summaryModel);
+        const furtherLinks = links.slice(0, 5);
 
         console.log({
           url: properties.url,
           title,
-          links,
+          links: furtherLinks,
           content: summarized.message.content,
         });
 
@@ -317,7 +321,7 @@ Provide a concise response based only on the content above. In your response:
           data: {
             url: properties.url,
             title,
-            links,
+            links: furtherLinks,
             content: summarized.message.content,
           },
         };
@@ -335,7 +339,7 @@ Provide a concise response based only on the content above. In your response:
     icon: BookOpenText,
     summary: "Searching inside a document.",
     description:
-      "Search for a query inside an uploaded document. Should be used when you need to reference a document to answer one of the user's queries, questions or tasks.",
+      "Search for relevant information inside an uploaded document. Should be used when you need to reference a document to answer one of the user's questions, requests, or tasks. The model should generate multiple search queries that capture different ways the relevant information might appear in the document, including synonyms, paraphrases, and related concepts. This helps ensure semantic search can find the most relevant chunks.",
     parameters: {
       type: "object",
       properties: {
@@ -346,7 +350,7 @@ Provide a concise response based only on the content above. In your response:
         query: {
           type: ["string", "string[]"],
           description:
-            "Query or queries to search for inside the provided document. A good query should cover most possible ways the target information may appear in the document. You should aim to use around 5 queries per file_search call.",
+            "The user's question or topic to search for in the document. The model should generate around 5 semantically varied queries that cover different ways the relevant information might appear. Queries should focus on meaning rather than exact wording, and avoid including instructions or filler text. These queries will be used for embedding-based search.",
         },
       },
       required: ["document_id", "query"],
@@ -375,12 +379,51 @@ Provide a concise response based only on the content above. In your response:
 
       matches.sort((resultA, resultB) => resultB.score - resultA.score);
 
-      const top = matches.slice(0, 5);
+      const top: string[] = [];
+      const already: number[] = [];
+
+      for (const match of matches) {
+        if (top.length >= 8) break;
+
+        if (!already.includes(match.key)) {
+          already.push(match.key);
+          top.push(contextDocument.chunks[match.key]);
+        }
+      }
+
+      const response = await ollama.chat({
+        model: "granite4:micro-h",
+        options: {
+          num_ctx: 64000,
+        },
+        messages: [
+          {
+            role: "user",
+            content: `You are an assistant that extracts relevant information from document chunks.
+
+User query:
+"${context.lastMessage}"
+
+Document chunks:
+${top.map((chunk, i) => `${i + 1}. ${chunk}`).join("\n")}
+
+Instructions:
+1. Identify only the information in the chunks that directly relates to the user's query.
+2. Ignore unrelated content; do not invent answers.
+3. Provide the extracted information in a concise, structured manner suitable for the main model to use.
+4. If no chunks contain relevant information, respond with "No relevant information found."
+
+Output only the extracted information.`,
+          },
+        ],
+      });
+
+      console.log(top);
+      console.log("extracted");
+      console.log(response.message.content);
 
       return {
-        data: {
-          matched_chunks: top.map((result) => contextDocument.chunks[result.key]),
-        },
+        data: response.message.content,
       };
     },
   },
@@ -390,7 +433,7 @@ Provide a concise response based only on the content above. In your response:
 
     summary: "Summarizing a document",
     description:
-      "Summarize an user uploaded document. Should only be used when the user explicitly asks for a document summary.",
+      "Summarize an user uploaded document. Should only be used when the user explicitly asks for a document summary. Do not summarize a document only when explicitly asked to, otherwise refer to the file_search tool.",
 
     parameters: {
       type: "object",
@@ -411,41 +454,10 @@ Provide a concise response based only on the content above. In your response:
       }
 
       const contextDocument = context.documents[properties.document_id];
-      const chunkSize = 4096;
-
-      let stitched = contextDocument.chunks.join("\n\n");
-      let chunks = splitText(stitched, chunkSize);
-
-      while (stitched.length > chunkSize) {
-        stitched = "";
-
-        for (const chunk of chunks) {
-          console.log("Summarizing...");
-          const response = await ollama.chat({
-            model: "gemma3:4b",
-            options: {
-              num_ctx: 64000,
-            },
-            messages: [
-              {
-                role: "user",
-                content: `Summarize the following document in english, keeping important facts and information. Do not leave out important information like task numbers or markers. Respond ONLY with the summary. Don't reaffirm or provide any other commentary.
----
-${chunk}
----`,
-              },
-            ],
-          });
-
-          console.log("Summary:", response.message.content);
-          stitched += response.message.content;
-        }
-
-        chunks = splitText(stitched, chunkSize);
-      }
+      const stitched = contextDocument.chunks.join("");
 
       const response = await ollama.chat({
-        model: "gemma3:4b",
+        model: "granite4:micro-h",
         options: {
           num_ctx: 64000,
         },
@@ -453,9 +465,9 @@ ${chunk}
           {
             role: "user",
             content: `Summarize the following document in english, keeping important facts and information. Do not leave out important information like task numbers or markers. Respond ONLY with the summary. Don't reaffirm or provide any other commentary.
----
-${stitched}
----`,
+
+Document:
+${stitched}`,
           },
         ],
       });
@@ -465,27 +477,6 @@ ${stitched}
       };
     },
   },
-  // {
-  //   name: "memory_save",
-  //   description:
-  //     "Save a piece of information about the user that may later be used to personalize or improve your chats with them. 'Memories' are available in every single chat the user has with you, so you'll remember the user's preferences, likes/dislikes etc...",
-  //   parameters: {
-  //     type: "object",
-  //     properties: {
-  //       memory: {
-  //         type: "string",
-  //         description:
-  //           "The memory to save. Should be descriptive so later when you scan the user's memories you can easily guess what you meant when you wrote them.",
-  //       },
-  //     },
-  //     required: ["memory"],
-  //   },
-
-  //   execute(properties) {
-  //     console.log("save", properties.memory);
-  //     return "saved memory";
-  //   },
-  // },
 ];
 
 const inputTags: InputTag[] = [
@@ -534,17 +525,6 @@ const inputTags: InputTag[] = [
     },
   },
 ];
-
-function countChars(text: string, char: string): number {
-  const charCode = char.charCodeAt(0);
-  let count = 0;
-
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === charCode) count++;
-  }
-
-  return count;
-}
 
 function OptionsButton(props: {
   freeLoadedModels: () => void;
@@ -622,10 +602,6 @@ function ChatMessageAttachmentView(props: { attachment: ChatMessageAttachment })
 }
 
 function formatErrorData(error: unknown) {
-  // {(props.subMessage.message as Error).name}: {(props.subMessage.message as Error).message}
-  // {"\n"}
-  // {(props.subMessage.message as Error).stack!.split("\n").map((line) => `  ${line}`)}
-
   if (!(error instanceof Error)) return `${error}`;
 
   return `${error.name}: ${error.message}\n${(error.stack ?? "")
@@ -924,7 +900,7 @@ function InputTagButton(props: { tag: string; toggleTag: (tag: string) => void }
 
 function App() {
   const [modelMetadata, setModelMetadata] = createSignal<ShowResponse | null>(null);
-  const [selectedModel, setSelectedModel] = createSignal("qwen3:14b");
+  const [selectedModel, setSelectedModel] = createSignal("qwen3:8b");
   const [modelState, setModelState] = createSignal<ModelState>("loading");
   const [inputTag, setInputTag] = createSignal<string | null>(null);
   const [messages, setMessages] = createSignal<ChatMessage[]>([]);
@@ -1095,6 +1071,7 @@ function App() {
   async function runModelTool(
     assistantMessage: AssistantChatMessage,
     supportedTools: ModelTool[],
+    lastMessage: string,
     toolName: string,
     toolParams: Record<string, string>,
   ): Promise<ToolOutput> {
@@ -1123,6 +1100,7 @@ function App() {
     const toolContext: ToolContext = {
       model: selectedModel(),
       documents: ragDocuments,
+      lastMessage: lastMessage,
     };
 
     const result = await foundTool.execute(toolParams, toolContext);
@@ -1142,47 +1120,20 @@ function App() {
   }
 
   async function processDocumentUploads(fileUploads: UserFile[]) {
-    const pdfRenderCanvas = document.createElement("canvas");
+    // const pdfRenderCanvas = document.createElement("canvas");
     const partialDocuments: { name: string; chunks: string[] }[] = [];
 
     for (const file of fileUploads) {
       if (file.kind !== "document") continue;
-      console.group(`[OCR] ${file.fileName}`);
-      const task = pdfjs.getDocument(file.content);
-      const pdf = await task.promise;
-      const desiredWidth = 1000;
 
-      let documentText = "";
+      console.group(`[DOC] ${file.fileName}`);
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        console.group(`[OCR] [PAGE] ${i}`);
+      let documentText: string;
 
-        const page = await pdf.getPage(i);
-        const originalViewport = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({
-          scale: desiredWidth / originalViewport.width,
-        });
-
-        pdfRenderCanvas.width = viewport.width;
-        pdfRenderCanvas.height = viewport.height;
-
-        console.log("[OCR] rendering");
-        const renderTask = page.render({
-          canvas: pdfRenderCanvas,
-          viewport,
-        });
-
-        await renderTask.promise;
-
-        const dataURL = pdfRenderCanvas.toDataURL("image/png");
-
-        console.log("[OCR] processing");
-        const content = await ocr.imageToMarkdown(dataURL.substring(dataURL.indexOf(",") + 1));
-
-        console.log(content);
-        documentText += content + "\n";
-
-        console.groupEnd();
+      if (file.fileName.endsWith(".pdf")) {
+        documentText = await extractPDF(file.content);
+      } else {
+        throw new Error(`cannot parse document '${file.fileName}'`);
       }
 
       partialDocuments.push({ name: file.fileName, chunks: splitText(documentText, 512) });
@@ -1325,6 +1276,7 @@ function App() {
               const result = await runModelTool(
                 assistantMessage,
                 supportedTools,
+                userMessage,
                 tool.function.name,
                 tool.function.arguments,
               );
@@ -1429,7 +1381,7 @@ function App() {
               toolParams[parameterName] = parameter.textContent;
             }
 
-            const result = await runModelTool(assistantMessage, supportedTools, toolName, toolParams);
+            const result = await runModelTool(assistantMessage, supportedTools, userMessage, toolName, toolParams);
 
             modelMessages.push({ role: "assistant", content: `\`\`\`xml\n${toolContent}\n\`\`\``, hidden: true });
             modelMessages.push({
