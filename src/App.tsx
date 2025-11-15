@@ -21,13 +21,13 @@ export default function App() {
   return (
     <div class="flex">
       <div class="flex w-[255px] flex-col gap-2 border-r border-zinc-800 p-2">
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col">
           <ChatItem onClick={() => chatManager.createNewChat()}>
             <NotebookPen size={18} />
             New chat
           </ChatItem>
         </div>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col">
           <For each={chatManager.chats()}>
             {(chat) => (
               <ChatItem
@@ -42,7 +42,7 @@ export default function App() {
           </For>
         </div>
       </div>
-      <ChatView chat={chatManager.currentChat()} selectedModel="qwen3:14b" />
+      <ChatView chat={chatManager.currentChat()} selectedModel="gpt-oss:20b" />
     </div>
   );
 }

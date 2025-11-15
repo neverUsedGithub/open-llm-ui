@@ -33,11 +33,11 @@ import pdfjsWorkerURL from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import * as streamingMarkdown from "streaming-markdown";
-
-import "./Chat.css";
 import type { ChatManagerChat } from "./chatmanager/ChatManager";
 import { inputTags } from "./inputtags";
 import { modelTools } from "./tools";
+
+import "./Chat.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerURL;
 
@@ -262,16 +262,16 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
   newElementObserver.observe(messageContainer, { childList: true, subtree: true });
 
   const timeEnd: number = props.subMessage.timeEnd() || Date.now();
+  const [thinkingExpanded, setThinkingExpanded] = createSignal(false);
   const [thinkingTime, setThinkingTime] = createSignal(timeEnd - props.subMessage.timeStart());
 
-  const [thinkingExpanded, setThinkingExpanded] = createSignal(false);
+  const textSub = props.subMessage as TextSubChatMessage;
 
   if (props.subMessage.thinking) {
     const updateTime = 10;
 
     function thinkingIncrement() {
-      const sub = props.subMessage as TextSubChatMessage;
-      if (sub.finished) return;
+      if (textSub.finished) return;
 
       setThinkingTime((time) => time + updateTime);
       setTimeout(thinkingIncrement, updateTime);
@@ -284,8 +284,8 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
     renderer ??= streamingMarkdown.default_renderer(messageContainer);
     parser ??= streamingMarkdown.parser(renderer);
 
-    streamingMarkdown.parser_write(parser, (props.subMessage as TextSubChatMessage).content().substring(lastWritten));
-    lastWritten = (props.subMessage as TextSubChatMessage).content().length;
+    streamingMarkdown.parser_write(parser, textSub.content().substring(lastWritten));
+    lastWritten = textSub.content().length;
   });
 
   createEffect(() => {
@@ -449,6 +449,26 @@ export function ChatView(props: ChatViewProps) {
     }
   });
 
+  let shouldScrollToBottom = true;
+
+  createEffect(() => {
+    props.chat;
+
+    shouldScrollToBottom = true;
+    droppedScrollEvents = 0;
+  });
+
+  function scrollingContainerScroll(ev: WheelEvent) {
+    const parentEl = messagesContainer.parentElement!.parentElement!;
+
+    if (ev.deltaY > 0) {
+      const dist = Math.abs(messagesContainer.scrollHeight - (parentEl.scrollTop + parentEl.offsetHeight));
+      shouldScrollToBottom = dist < 100;
+    } else {
+      shouldScrollToBottom = false;
+    }
+  }
+
   createEffect(() => {
     for (const message of props.chat.displayMessages()) {
       if (message.role === "assistant") {
@@ -458,8 +478,11 @@ export function ChatView(props: ChatViewProps) {
       }
     }
 
-    if (messagesContainer?.parentElement?.parentElement) {
-      messagesContainer.parentElement.parentElement.scrollTo({ top: messagesContainer.scrollHeight });
+    if (messagesContainer?.parentElement?.parentElement && shouldScrollToBottom) {
+      messagesContainer.parentElement.parentElement.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: "smooth",
+      });
     }
   });
 
@@ -583,7 +606,7 @@ export function ChatView(props: ChatViewProps) {
         </Show>
 
         <Show when={!chatHistoryEmpty()}>
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1 overflow-y-auto" onWheel={scrollingContainerScroll}>
             <div class="mx-auto h-full max-h-full w-full max-w-[800px]">
               <div class="flex flex-col gap-4 overflow-x-hidden pb-32" ref={messagesContainer}>
                 <For each={props.chat.displayMessages()}>{(message) => <ChatMessageView message={message} />}</For>
