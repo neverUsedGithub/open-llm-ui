@@ -1,4 +1,7 @@
 import { extractPDF } from "@/documents/pdf";
+import * as embedding from "@/embedding";
+import * as serializeChat from "@/serialization/chat";
+import * as serializeChatList from "@/serialization/chatList";
 import type {
   AssistantChatMessage,
   ChatData,
@@ -18,23 +21,10 @@ import type {
   UserChatMessage,
   UserFile,
 } from "@/types";
-import * as vectordb from "@/vectordb";
-import * as embedding from "@/embedding";
-import * as serializeChat from "@/serialization/chat";
-import * as serializeChatList from "@/serialization/chatList";
 import { buildSystemPrompt } from "@/util/prompt";
-import { splitText } from "@/util/splitText";
+import * as vectordb from "@/vectordb";
 import ollama, { type AbortableAsyncIterator, type ChatResponse } from "ollama";
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  runWithOwner,
-  untrack,
-  type Accessor,
-  type Setter,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, runWithOwner, untrack, type Accessor, type Setter } from "solid-js";
 
 function noop() {}
 
@@ -43,6 +33,7 @@ function createSubMessage(data: SubChatMessageData): SubChatMessage {
 
   const [content, setContent] = createSignal(data.content);
 
+  const [finished, setFinished] = createSignal(data.finished);
   const [timeEnd, setTimeEnd] = createSignal(data.timeEnd);
   const [timeStart, setTimeStart] = createSignal(data.timeStart);
 
@@ -55,13 +46,14 @@ function createSubMessage(data: SubChatMessageData): SubChatMessage {
     content,
     stream,
     thinking: data.thinking,
-    finished: data.finished,
 
     removeToolCall: noop,
 
+    finished,
     timeStart,
     timeEnd,
 
+    setFinished,
     setTimeStart,
     setTimeEnd,
   };
@@ -92,7 +84,7 @@ export function createChatMessage(
       const lastMessage = subMessages()[subMessages().length - 1];
 
       if (lastMessage && lastMessage.kind === "text") {
-        lastMessage.finished = true;
+        lastMessage.setFinished(true);
 
         if (lastMessage.timeEnd() === 0) {
           lastMessage.setTimeEnd(Date.now());

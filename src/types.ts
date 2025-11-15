@@ -65,11 +65,12 @@ export type TextSubChatMessage = {
   content: Accessor<string>;
   stream(chunk: string): void;
   removeToolCall: () => void;
-  finished: boolean;
 
+  finished: Accessor<boolean>;
   timeStart: Accessor<number>;
   timeEnd: Accessor<number>;
 
+  setFinished: Setter<boolean>;
   setTimeStart: Setter<number>;
   setTimeEnd: Setter<number>;
 };

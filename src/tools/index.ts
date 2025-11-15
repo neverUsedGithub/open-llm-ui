@@ -292,7 +292,7 @@ Output only the extracted information.`,
     icon: BookOpenText,
     summary: "Searching inside a document.",
     description:
-      "Search for relevant information inside an uploaded document. Should be used when you need to reference a document to answer one of the user's questions, requests, or tasks. The model should generate multiple search queries that capture different ways the relevant information might appear in the document, including synonyms, paraphrases, and related concepts. This helps ensure semantic search can find the most relevant chunks.",
+      "Search for relevant information inside an uploaded document. Should be used when you need to reference a document to answer one of the user's questions, requests, or tasks. You must generate multiple search queries that capture different ways the relevant information might appear in the document, including synonyms, paraphrases, and related concepts. This helps ensure semantic search can find the most relevant chunks.",
     parameters: {
       type: "object",
       properties: {
@@ -301,7 +301,7 @@ Output only the extracted information.`,
           description: "The document id to search for the provided query or queries.",
         },
         query: {
-          type: ["string", "string[]"],
+          type: "string[]",
           description:
             "The user's question or topic to search for in the document. The model should generate around 5 semantically varied queries that cover different ways the relevant information might appear. Queries should focus on meaning rather than exact wording, and avoid including instructions or filler text. These queries will be used for embedding-based search.",
         },
@@ -309,18 +309,17 @@ Output only the extracted information.`,
       required: ["document_id", "query"],
     },
 
-    async execute(properties: { document_id: number; query: string | string[] }, context) {
-      if (properties.document_id < 0 && properties.document_id >= context.documents.length) {
+    async execute(properties: { document_id: number; query: string[] }, context) {
+      if (properties.document_id < 0 || properties.document_id >= context.documents.length) {
         return {
           data: "Invalid `document_id` provided. Please check if the user has provided a document with that id.",
         };
       }
 
       const contextDocument = context.documents[properties.document_id];
-      const queries = Array.isArray(properties.query) ? properties.query : [properties.query];
       let matches: vectordb.DBQueryResult[] = [];
 
-      for (const query of queries) {
+      for (const query of properties.query) {
         matches = matches.concat(contextDocument.vectors.query(await embedding.generateEmbedding(query), 5));
 
         for (let i = 0; i < contextDocument.chunks.length; i++) {
@@ -393,14 +392,14 @@ Output only the extracted information.`,
       properties: {
         document_id: {
           type: "number",
-          description: "The document id to summarize",
+          description: "The document id to summarize.",
         },
       },
       required: ["document_id"],
     },
 
     async execute(properties: { document_id: number }, context) {
-      if (properties.document_id < 0 && properties.document_id >= context.documents.length) {
+      if (properties.document_id < 0 || properties.document_id >= context.documents.length) {
         return {
           data: "Invalid `document_id` provided. Please check if the user has provided a document with that id.",
         };

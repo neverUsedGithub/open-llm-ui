@@ -271,7 +271,7 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
     const updateTime = 10;
 
     function thinkingIncrement() {
-      if (textSub.finished) return;
+      if (textSub.finished()) return;
 
       setThinkingTime((time) => time + updateTime);
       setTimeout(thinkingIncrement, updateTime);
@@ -289,7 +289,7 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
   });
 
   createEffect(() => {
-    if (!props.latest && parser) {
+    if (textSub.finished() && parser) {
       streamingMarkdown.parser_end(parser);
     }
   });
