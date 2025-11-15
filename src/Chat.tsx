@@ -455,7 +455,6 @@ export function ChatView(props: ChatViewProps) {
     props.chat;
 
     shouldScrollToBottom = true;
-    droppedScrollEvents = 0;
   });
 
   function scrollingContainerScroll(ev: WheelEvent) {
