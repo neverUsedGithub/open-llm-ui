@@ -282,6 +282,11 @@ export class ChatManagerChat {
     };
   }
 
+  public delete() {
+    if (this.ollamaResponse) this.ollamaResponse.abort();
+    serializeChat.deleteChat(this.id);
+  }
+
   public sendMessage(
     selectedModel: string,
     userMessage: string,
@@ -679,6 +684,19 @@ export class ChatManager {
     serializeChatList.saveChats(chatData);
   }
 
+  deleteChat(chatId: string) {
+    const existing = this.chats().find((chat) => chat.id === chatId);
+
+    if (existing) {
+      if (this.chatId() === chatId) {
+        this.createNewChat();
+      }
+
+      existing.delete();
+      this.setChats(this.chats().filter((chat) => chat.id !== chatId));
+    }
+  }
+
   createNewChat() {
     this.setChatId(null);
 
@@ -704,9 +722,8 @@ export class ChatManager {
 
       temporary.onCreate = () => {
         this.addChat(temporary);
-        this.setChatId(temporary.id);
 
-        runWithOwner(null, () => temporary.onOpen());
+        runWithOwner(null, () => this.setOpenChat(temporary.id));
       };
 
       return temporary;

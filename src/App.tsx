@@ -2,13 +2,27 @@ import { For, type JSX } from "solid-js";
 import { ChatView } from "./Chat";
 
 import NotebookPen from "lucide-solid/icons/notebook-pen";
-import { ChatManager } from "./chatmanager/ChatManager";
+import EllipsisIcon from "lucide-solid/icons/ellipsis";
+import TrashIcon from "lucide-solid/icons/trash-2";
 
-function ChatItem(props: { children: JSX.Element; onClick: () => void }) {
+import { ChatManager } from "./chatmanager/ChatManager";
+import { Dropdown } from "./components/Dropdown";
+import { cn } from "./util/cn";
+
+function ChatItem(props: { children: JSX.Element; onClick: () => void; class?: string }) {
+  let chatItemElement!: HTMLButtonElement;
+
+  function chatItemClick(ev: Event) {
+    if (ev.target === chatItemElement) {
+      props.onClick();
+    }
+  }
+
   return (
     <button
-      class="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-zinc-800"
-      onClick={props.onClick}
+      class={cn("flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-zinc-800", props.class)}
+      onClick={chatItemClick}
+      ref={chatItemElement}
     >
       {props.children}
     </button>
@@ -31,12 +45,23 @@ export default function App() {
           <For each={chatManager.chats()}>
             {(chat) => (
               <ChatItem
-                onClick={() => {
-                  console.log("SWITCH", chat.id);
-                  chatManager.setOpenChat(chat.id);
-                }}
+                class="justify-between not-hover:[&>:nth-child(2)>:nth-child(1)]:opacity-0"
+                onClick={() => chatManager.setOpenChat(chat.id)}
               >
-                {chat.name()}
+                <span>{chat.name()}</span>
+                <Dropdown>
+                  <Dropdown.Trigger>
+                    <button class="cursor-pointer">
+                      <EllipsisIcon class="size-4" />
+                    </button>
+                  </Dropdown.Trigger>
+                  <Dropdown.Content>
+                    <Dropdown.Item variant="destructive" onSelect={() => chatManager.deleteChat(chat.id)}>
+                      <TrashIcon class="size-4" />
+                      Delete
+                    </Dropdown.Item>
+                  </Dropdown.Content>
+                </Dropdown>
               </ChatItem>
             )}
           </For>

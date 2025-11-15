@@ -32,7 +32,7 @@ export function Dropdown(props: { children: JSX.Element }) {
 
   return (
     <DropdownContext.Provider value={context}>
-      <div class="relative">{props.children}</div>
+      <div class="relative flex">{props.children}</div>
     </DropdownContext.Provider>
   );
 }
@@ -88,11 +88,16 @@ Dropdown.Trigger = function DropdownTrigger(props: { children: JSX.Element }) {
   return <>{resolved()}</>;
 };
 
-Dropdown.Content = function DropdownContent(props: { children: JSX.Element }) {
+Dropdown.Content = function DropdownContent(props: { children: JSX.Element; class?: string }) {
   const ctx = useContext(DropdownContext)!;
 
   ctx.contentElement = (
-    <div class="bg-background-default border-background-higher absolute bottom-14 -left-3 flex w-64 flex-col rounded-2xl border-1 px-1.5 py-1.5">
+    <div
+      class={cn(
+        "bg-background-default border-background-higher absolute z-30 flex w-64 flex-col rounded-2xl border-1 px-1.5 py-1.5",
+        props.class,
+      )}
+    >
       {props.children}
     </div>
   ) as HTMLElement;
@@ -100,10 +105,19 @@ Dropdown.Content = function DropdownContent(props: { children: JSX.Element }) {
   return <Show when={ctx.isOpen()}>{ctx.contentElement}</Show>;
 };
 
+type DropdownVariant = "default" | "destructive" | "warn";
+
+const dropdownVariants: Record<DropdownVariant, string> = {
+  default: "not-disabled:hover:bg-background-higher disabled:text-foreground-muted",
+  destructive: "not-disabled:hover:bg-red-800/25 disabled:text-red-600 text-red-300",
+  warn: "not-disabled:hover:bg-yellow-800/25 disabled:text-yellow-600 text-yellow-300",
+};
+
 Dropdown.Item = function DropdownItem(props: {
   children: JSX.Element;
   disabled?: boolean;
   class?: string;
+  variant?: DropdownVariant;
   onSelect?: () => void;
 }) {
   const ctx = useContext(DropdownContext)!;
@@ -117,7 +131,8 @@ Dropdown.Item = function DropdownItem(props: {
     <button
       onClick={selectItem}
       class={cn(
-        "not-disabled:hover:bg-background-higher disabled:text-foreground-muted flex not-disabled:cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left",
+        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left not-disabled:cursor-pointer",
+        dropdownVariants[props.variant ?? "default"],
         props.class,
       )}
       disabled={props.disabled}

@@ -57,7 +57,7 @@ function OptionsButton(props: {
           <PlusIcon class="text-foreground-muted size-5" />
         </button>
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content class="bottom-14 -left-3">
         <Dropdown.Item onSelect={props.promptFileUpload}>
           <PaperclipIcon class="size-4" />
           <span class="-translate-y-0.25">Add photo or file</span>

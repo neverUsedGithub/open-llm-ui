@@ -146,3 +146,7 @@ export function saveChat(
     }),
   );
 }
+
+export function deleteChat(chatId: string) {
+  localStorage.removeItem(`llm-ui-chat-${chatId}`);
+}
