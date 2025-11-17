@@ -67,7 +67,7 @@ export default function App() {
           </For>
         </div>
       </div>
-      <ChatView chat={chatManager.currentChat()} selectedModel="gpt-oss:20b" />
+      <ChatView chat={chatManager.currentChat()} selectedModel="qwen3:30b-a3b-instruct-2507-q4_K_M" />
     </div>
   );
 }

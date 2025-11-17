@@ -17,7 +17,7 @@ export interface AssistantChatMessage {
   role: "assistant";
 
   state: Accessor<ChatMessageState>;
-  setState: Setter<ChatMessageState>;
+  setState: (state: ChatMessageState) => void;
 
   subMessages: Accessor<SubChatMessage[]>;
 

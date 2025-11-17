@@ -320,7 +320,7 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
         <button class="flex cursor-pointer items-center gap-2" onClick={() => setThinkingExpanded((prev) => !prev)}>
           <LightbulbIcon class="size-4" />
           <span class="-translate-y-0.25">
-            {props.latest && !props.subMessage.finished ? "Thinking" : "Thought"} for{" "}
+            {props.latest && !props.subMessage.finished() ? "Thinking" : "Thought"} for{" "}
             {(thinkingTime() / 1000).toFixed(1)}s
           </span>
         </button>

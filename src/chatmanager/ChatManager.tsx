@@ -24,7 +24,7 @@ import type {
 import { buildSystemPrompt } from "@/util/prompt";
 import * as vectordb from "@/vectordb";
 import type { AbortableAsyncIterator } from "ollama";
-import ollama, {type ChatResponse } from "ollama/browser";
+import ollama, { type ChatResponse } from "ollama/browser";
 import { createEffect, createMemo, createSignal, runWithOwner, untrack, type Accessor, type Setter } from "solid-js";
 
 function noop() {}
@@ -76,7 +76,13 @@ export function createChatMessage(
     role: role as "assistant",
 
     state,
-    setState,
+    setState(newState) {
+      if (newState === "finished" && subMessages().length > 0) {
+        const last = subMessages()[subMessages().length - 1];
+        if (last.kind === "text") last.setFinished(true);
+      }
+      setState(newState);
+    },
 
     subMessages,
 
@@ -369,6 +375,16 @@ export class ChatManagerChat {
         assistantMessage.setState("loading");
       }
 
+      let useThinking: boolean | "low" | "medium" | "high" = false;
+
+      if (capabilities.thinking) {
+        useThinking = true;
+
+        if (currentTag && currentTag.id === "think" && selectedModel.includes("gpt-oss")) {
+          useThinking = "high";
+        }
+      }
+
       this.ollamaResponse = await ollama.chat({
         messages: this.nativeMessages(),
         model: selectedModel,
@@ -379,7 +395,7 @@ export class ChatManagerChat {
             }))
           : undefined,
         stream: true,
-        think: !currentTag ? true : currentTag.id === "think" && selectedModel.includes("gpt-oss") ? "high" : true,
+        think: useThinking,
       });
 
       let isToolCall = false;
