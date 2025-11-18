@@ -459,7 +459,7 @@ export function ChatView(props: ChatViewProps) {
 
     if (ev.deltaY > 0) {
       const dist = Math.abs(messagesContainer.scrollHeight - (parentEl.scrollTop + parentEl.offsetHeight));
-      shouldScrollToBottom = dist < 200;
+      shouldScrollToBottom = dist < 250;
     } else {
       shouldScrollToBottom = false;
     }
