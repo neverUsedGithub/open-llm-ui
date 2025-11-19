@@ -59,6 +59,8 @@ Dropdown.Trigger = function DropdownTrigger(props: { children: JSX.Element }) {
   });
 
   function clickOut(ev: MouseEvent) {
+    if (!ctx.isOpen()) return;
+    
     const childrenJSX = resolved();
     const children = Array.isArray(childrenJSX) ? childrenJSX : [childrenJSX];
 
