@@ -80,7 +80,7 @@ export default function App() {
                 {chatManager.currentChat().selectedModel()}
               </button>
             </Combobox.Trigger>
-            <Combobox.Content class="left-full">
+            <Combobox.Content class="top-full mt-2">
               <For each={chatManager.availableModels()}>
                 {(model) => (
                   <Combobox.Item value={model} onSelect={() => chatManager.currentChat().setSelectedModel(model)}>
