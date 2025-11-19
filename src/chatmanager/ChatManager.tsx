@@ -133,10 +133,10 @@ export class ChatManagerChat {
   protected setName: Setter<string>;
 
   public selectedModel: Accessor<string>;
-  private setSelectedModel: Setter<string>;
+  public setSelectedModel: Setter<string>;
 
   public selectedModelMetadata: Accessor<ModelMetadata | null>;
-  public setSelectedModelMetadadata: Setter<ModelMetadata | null>;
+  private setSelectedModelMetadadata: Setter<ModelMetadata | null>;
 
   private ollamaResponse: AbortableAsyncIterator<ChatResponse> | null;
 
@@ -671,6 +671,9 @@ export class ChatManager {
   public chats: Accessor<ChatManagerChat[]>;
   private setChats: Setter<ChatManagerChat[]>;
 
+  public availableModels: Accessor<string[]>;
+  private setAvailableModels: Setter<string[]>;
+
   public currentChat: Accessor<ChatManagerChat>;
 
   private defaultModel: string;
@@ -682,6 +685,7 @@ export class ChatManager {
 
     [this.chats, this.setChats] = createSignal<ChatManagerChat[]>([]);
     [this.chatId, this.setChatId] = createSignal<string | null>(null);
+    [this.availableModels, this.setAvailableModels] = createSignal<string[]>([]);
 
     this.currentChat = createMemo(() => {
       const chatId = this.chatId();
@@ -690,11 +694,17 @@ export class ChatManager {
 
     this.loadChats();
     this.autoSave();
+    this.loadModels();
   }
 
   public static getInstance(defaultModel: string): ChatManager {
     if (this.instance === null) this.instance = new ChatManager(defaultModel);
     return this.instance;
+  }
+
+  private async loadModels() {
+    const result = await ollama.list();
+    this.setAvailableModels(result.models.map((model) => model.name));
   }
 
   private loadChats() {

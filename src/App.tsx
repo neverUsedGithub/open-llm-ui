@@ -8,6 +8,8 @@ import TrashIcon from "lucide-solid/icons/trash-2";
 import { ChatManager } from "./chatmanager/ChatManager";
 import { Dropdown } from "./components/Dropdown";
 import { cn } from "./util/cn";
+import { Combobox } from "./components/Combobox";
+import { Badge } from "./components/Badge";
 
 function ChatItem(props: { children: JSX.Element; onClick: () => void; class?: string }) {
   let chatItemElement!: HTMLButtonElement;
@@ -71,8 +73,26 @@ export default function App() {
         </div>
       </div>
       <div class="flex h-screen max-h-screen flex-1 flex-col">
-        <div class="border-background-default flex border-b px-4 py-2 text-sm">
-          {chatManager.currentChat().selectedModel()}
+        <div class="border-background-default flex border-b px-2 py-2 text-sm gap-2">
+          <Combobox>
+            <Combobox.Trigger>
+              <button class="bg-background-default outline-background-higher cursor-pointer rounded-lg px-3 py-1 outline">
+                {chatManager.currentChat().selectedModel()}
+              </button>
+            </Combobox.Trigger>
+            <Combobox.Content class="left-full">
+              <For each={chatManager.availableModels()}>
+                {(model) => (
+                  <Combobox.Item value={model} onSelect={() => chatManager.currentChat().setSelectedModel(model)}>
+                    {model}
+                  </Combobox.Item>
+                )}
+              </For>
+              <Combobox.Empty>No matches.</Combobox.Empty>
+            </Combobox.Content>
+          </Combobox>
+          <Badge variant="warn">{chatManager.currentChat().selectedModelMetadata()?.details.parameterSize}</Badge>
+          <Badge variant="info">{chatManager.currentChat().selectedModelMetadata()?.details.quantizationLevel}</Badge>
         </div>
         <div class="flex-1 overflow-y-auto">
           <ChatView chat={chatManager.currentChat()} />
