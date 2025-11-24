@@ -41,7 +41,7 @@ export const modelTools: ModelTool[] = [
     icon: ImagePlusIcon,
     summary: "Generating an image.",
     description:
-      "Generate a high-quality, detailed image based solely on the provided textual description. The output will be automatically rendered and displayed to the user—do not include any image files, references, or descriptions of the image in your response.",
+      "Generate an image based on a text prompt. After calling this tool and the image is successfully generated, try asking the user follow-up questions, whether they would like to make any adjustments or refinements to the image. Do not provide image links, or any other third-party URLs, do not summarize the content of the image, or provide any other commentary, other than the follow-up question.",
     parameters: {
       type: "object",
       properties: {
@@ -98,7 +98,10 @@ Refinement Process:
       });
 
       return {
-        data: "The image was generated successfully and will be shown to the user. Next up you should ask the user if they like the image and whether or not they would like to make any adjustments to it.",
+        data: {
+          success: true,
+          message: "image generated successfully",
+        },
         images: [imageBlob],
       };
     },
