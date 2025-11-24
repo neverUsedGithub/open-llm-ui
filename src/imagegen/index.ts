@@ -3,7 +3,21 @@ import { comfyGenerateImage } from "./comfyui";
 import fluxDevWorkflow from "./workflows/flux-dev.json";
 import qwenImageWorkflow from "./workflows/qwen_image.json";
 
-function readyWorkflow(type: "flux-dev" | "qwen-image", prompt: string, width: number, height: number): unknown {
+export type GenImageQuality = "low" | "medium" | "high";
+
+const qualitySteps: Record<GenImageQuality, number> = {
+  low: 2,
+  medium: 4,
+  high: 8,
+};
+
+function readyWorkflow(
+  type: "flux-dev" | "qwen-image",
+  prompt: string,
+  width: number,
+  height: number,
+  quality: GenImageQuality,
+): unknown {
   if (type === "flux-dev") {
     const workflow = structuredClone(fluxDevWorkflow);
 
@@ -24,14 +38,27 @@ function readyWorkflow(type: "flux-dev" | "qwen-image", prompt: string, width: n
   workflow["75:58"].inputs.height = height;
 
   workflow["75:3"].inputs.seed = Math.floor(Math.random() * 1_000_000_000_000_000);
+  workflow["75:3"].inputs.steps = qualitySteps[quality] ?? qualitySteps["medium"];
 
   workflow["75:6"].inputs.text = prompt;
 
   return workflow;
 }
 
-export async function generateImage(prompt: string): Promise<Blob> {
-  const workflow = readyWorkflow("qwen-image", prompt, 512, 512);
+export interface GenImageOptions {
+  width: number;
+  height: number;
+  quality: GenImageQuality;
+}
+
+export async function generateImage(prompt: string, options?: GenImageOptions): Promise<Blob> {
+  const workflow = readyWorkflow(
+    "qwen-image",
+    prompt,
+    options?.width ?? 512,
+    options?.height ?? 512,
+    options?.quality ?? "medium",
+  );
   const image = await comfyGenerateImage(workflow, "http://localhost:8000");
 
   // Free up vram for ollama.

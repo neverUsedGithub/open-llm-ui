@@ -8,7 +8,7 @@ import type {
   ChatMessageState,
   DisplayChatMessage,
   InputTag,
-  ModelCapabilities,
+  MockOutputField,
   ModelMetadata,
   ModelState,
   ModelTool,
@@ -219,6 +219,16 @@ export class ChatManagerChat {
     this.setDisplayMessages([...this.displayMessages(), message]);
   }
 
+  private resolveMockNumberField(params: Record<string, string>, field: MockOutputField<number>): number {
+    if (typeof field === "number") {
+      return field;
+    } else if (typeof field === "string") {
+      return Number(params[field]);
+    }
+
+    return Object.hasOwn(params, field.property) ? Number(params[field.property]) : field.default;
+  }
+
   private async runModelTool(
     model: string,
     assistantMessage: AssistantChatMessage,
@@ -239,10 +249,13 @@ export class ChatManagerChat {
     if (foundTool.mockOutput) {
       for (const mock of foundTool.mockOutput) {
         if (mock.kind === "image") {
-          const imageWidth = typeof mock.width === "string" ? toolParams[mock.width] : mock.width;
-          const imageHeight = typeof mock.height === "string" ? toolParams[mock.height] : mock.height;
+          const imageWidth = this.resolveMockNumberField(toolParams, mock.width);
+          const imageHeight = this.resolveMockNumberField(toolParams, mock.height);
 
-          if (typeof imageWidth !== "number" || typeof imageHeight !== "number") continue;
+          if (Number.isNaN(imageWidth) || Number.isNaN(imageHeight)) {
+            console.warn("Tool call image mock contained invalid width/height, so it has been hidden.");
+            continue;
+          }
 
           mocks.push(assistantMessage.push({ kind: "image-mock", width: imageWidth, height: imageHeight }));
         }

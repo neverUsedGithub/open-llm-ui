@@ -40,40 +40,92 @@ export const modelTools: ModelTool[] = [
     name: "image_gen",
     icon: ImagePlusIcon,
     summary: "Generating an image.",
-    description: "Generate an image from a prompt.",
+    description:
+      "Generate a high-quality, detailed image based solely on the provided textual description. The output will be automatically rendered and displayed to the user—do not include any image files, references, or descriptions of the image in your response.",
     parameters: {
       type: "object",
       properties: {
         prompt: {
           type: "string",
-          description: `The prompt passed to an image generation AI model.
-Prompts sent to \`image_gen\` should always be in English. If the user supplies a prompt in a different language, first translate the user's prompt, then refine it in English.
-When refining an image prompt, the goal is to transform a short or vague request into a vivid, coherent description that an image generator can easily understand. The process begins by understanding the user's core intent. Identify the main subject of the image, such as a person, object, or scene. Determine the desired style or medium, like realistic photography, 3D render, anime, oil painting, or pixel art. Pay attention to the mood or tone the user wants—dark, cozy, mysterious, cheerful—and note the intended composition or framing, such as portrait, landscape, close-up, or wide shot. Also, look for any explicit requirements or restrictions, such as a transparent background, specific colors, or a request to exclude text or people.
-Once the intent is clear, infer missing visual details that make the scene coherent. If the user doesn't specify lighting, background, or atmosphere, make reasonable assumptions that fit the context. For example, a “night scene” implies dim lighting and cool tones, while a “cozy” room would use warm light and soft textures. These inferred details should be consistent with the subject and mood but not excessive—add enough to make the prompt visually clear without overloading it.
-Next, clarify ambiguous terms by replacing vague or subjective words with specific, visual ones. Instead of “cool lighting,” describe “soft golden light from a nearby lamp.” Instead of “fantasy scene,” describe “an ancient forest with glowing runes carved into stone pillars.” Resolve pronouns and unclear references so the subject of each phrase is explicit. Every part of the prompt should contribute directly to the image's appearance.
-It's also important to strictly follow the user's constraints. If they request no text, transparent background, or a certain color scheme, those rules should be preserved exactly. Do not introduce new subjects, text, or elements the user didn’t mention.
-Finally, rewrite the refined prompt as one to multiple clear sentences that sound natural, like instructions to a concept artist. Describe the scene in a cinematic or painterly way, focusing on sensory details and composition. For example: “A futuristic alley lit by flickering neon signs and mist, in a cyberpunk art style.” or “A tranquil forest clearing at dawn, with sunlight streaming through tall pines.” A good format to follow is: subject, style or medium, environment, lighting or mood, and any special details.`,
+          description: `Always use English for prompts, translate and refine non-English inputs.
+Refinement Process:
+1. Clarify intent: Identify the main subject, style (e.g., photo, 3D, anime), mood (e.g., cozy, mysterious), composition (e.g., close-up, wide shot), and constraints (e.g., no text, transparent background).
+2. Add missing details: Infers reasonable visual elements (lighting, background, atmosphere) based on context—e.g., "night scene" implies dim, cool lighting.
+3. Replace vague terms: Use specific, visual language (e.g., "soft golden light from a lamp" instead of "cool lighting").
+4. Eliminate ambiguity: Clarify pronouns and unclear references. Ensure every element directly contributes to the image.
+5. Respect constraints: Strictly follow user rules (e.g., no text, specific colors).
+6. Rewrite clearly: Combine all elements into 1–2 natural, cinematic sentences focusing on subject, style, environment, lighting, and key details. `,
+        },
+        width: {
+          type: "number",
+          description: "The width of the generated image. Defaults to 512.",
+        },
+        height: {
+          type: "number",
+          description: "The width of the generated image. Defaults to 512.",
+        },
+        quality: {
+          type: "string",
+          // @ts-expect-error I'm pretty sure this is supported?
+          enum: ["low", "medium", "high"],
+          description:
+            'The quality of the generated image. There are noticable changes between "low", "medium", and "high". Defaults to "medium".',
         },
       },
       required: ["prompt"],
     },
 
-    mockOutput: [{ kind: "image", width: 512, height: 512 }],
+    mockOutput: [
+      { kind: "image", width: { property: "width", default: 512 }, height: { property: "height", default: 512 } },
+    ],
 
     isSupported() {
       return imageGen.isAvailable();
     },
 
-    async execute(properties: { prompt: string }, ctx: ToolContext) {
+    async execute(
+      properties: { prompt: string; width?: number; height?: number; quality?: "low" | "medium" | "high" },
+      ctx: ToolContext,
+    ) {
       // Free up vram for comfy.
       // TODO: for high vram users add an option to disable this.
       await freeOllamaModel(ctx.model);
 
-      const imageBlob = await imageGen.generateImage(properties.prompt);
+      const imageBlob = await imageGen.generateImage(properties.prompt, {
+        width: properties.width ?? 512,
+        height: properties.height ?? 512,
+        quality: properties.quality ?? "medium",
+      });
 
       return {
         data: "The image was generated successfully and will be shown to the user. Next up you should ask the user if they like the image and whether or not they would like to make any adjustments to it.",
         images: [imageBlob],
+      };
+    },
+  },
+  {
+    name: "random_image",
+    icon: BinaryIcon,
+    summary: "Finding a random image.",
+    description: "Finds and returns a random image.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+
+    mockOutput: [
+      {
+        kind: "image",
+        width: 300,
+        height: 300,
+      },
+    ],
+
+    async execute(properties, context) {
+      return {
+        data: { success: true, message: "The image has been found, and is now shown to the user." },
+        images: [await fetch("https://picsum.photos/300/300").then((r) => r.blob())],
       };
     },
   },

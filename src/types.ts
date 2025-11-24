@@ -117,11 +117,13 @@ export interface ToolOutput {
   data: unknown;
 }
 
+export type MockOutputField<T> = T | string | { property: string; default: T };
+
 export type ToolImageOutput = {
   kind: "image";
 
-  width: number | string;
-  height: number | string;
+  width: MockOutputField<number>;
+  height: MockOutputField<number>;
 };
 
 export type ToolMockOutput = ToolImageOutput;
