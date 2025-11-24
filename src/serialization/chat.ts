@@ -64,6 +64,14 @@ export async function loadChat(chatId: string): Promise<
           subData.content = parsed.stringPool[subData.content as unknown as number];
         }
 
+        if (subData.kind === "attachment") {
+          if (subData.attachment.type === "image") {
+            subData.attachment.source = await fetch(subData.attachment.source as unknown as string).then((res) =>
+              res.blob(),
+            );
+          }
+        }
+
         assistantMessage.push(subData);
       }
 
@@ -87,7 +95,17 @@ export async function loadChat(chatId: string): Promise<
   return { exists: true, nativeMessages: nativeMessages, displayMessages: messages, documents };
 }
 
-export function saveChat(
+function base64Blob(blob: Blob): Promise<string> {
+  const reader = new FileReader();
+  reader.readAsDataURL(blob);
+
+  return new Promise((res, rej) => {
+    reader.onloadend = () => res(reader.result as string);
+    reader.onerror = () => rej();
+  });
+}
+
+export async function saveChat(
   chatId: string,
   chatMessages: DisplayChatMessage[],
   dataMessages: NativeChatMessage[],
@@ -122,7 +140,19 @@ export function saveChat(
       const sub: SubChatMessageData[] = [];
 
       for (const subMessage of message.subMessages()) {
-        if (subMessage.kind !== "text") {
+        if (subMessage.kind === "attachment") {
+          if (subMessage.attachment.type === "image") {
+            sub.push({
+              kind: "attachment",
+              attachment: {
+                type: "image",
+                source: (await base64Blob(subMessage.attachment.source)) as unknown as Blob,
+              },
+            });
+          } else {
+            sub.push(subMessage);
+          }
+        } else if (subMessage.kind !== "text") {
           sub.push(subMessage);
         } else {
           const poolIndex = stringPool.add(subMessage.content());
