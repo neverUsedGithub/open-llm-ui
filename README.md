@@ -1,28 +1,38 @@
+<p align="center">
+  <img src="./docs/open-ollama-ui.png" width="80%">
+</p>
+
+# Open Ollama UI
+
+Ollama interface without the hassle of downloading locally, while being open-source.
+
+## Set up
+
+You need to create a new environmental variable named `OLLAMA_ORIGINS` with the value `://neverusedgithub.github.io` (if the variable already exists separate the existing origins and the new origin with a comma).
+
 ## Usage
 
-```bash
-$ npm install # or pnpm install or yarn install
-```
+[Just open the Github Pages link!](https://neverusedgithub.github.io/open-ollama-ui/)
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+## Features
 
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm run dev`
-
-Runs the app in the development mode.<br>
-Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
-
-### `npm run build`
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-## Deployment
-
-Learn more about deploying your application with the [documentations](https://vite.dev/guide/static-deploy.html)
+- Streaming responses. (Ollama API)
+- Modern looking interface. (ChatGPT inspired)
+- Saved chats. (LocalStorage, IndexedDB possibly in the future)
+- Tool support.
+  - Image generation tool. (ComfyUI API)  
+    **Requires models installed in ComfyUI, see [workflows/qwen_image.json](./src/imagegen/workflows/qwen_image.json)**
+  - Web search tool. (Brave API + support extension)
+  - Web fetch tool. (support extension)
+  - File search tool.
+  - File summary tool.
+  - Custom tool syntax for models without native tool support.
+- In-browser RAG solution.
+  - Ollama API for embeddings.
+  - Separate vector database per chat.
+  - PDF parsing. (text based, could be extended to OCR)
+- Code & LaTeX highlighting/rendering.
+- Visible and collapsible thinking blocks.
+- Good performance.
+  - SolidJS as choice of framework.
+  - Uses [streaming-markdown](https://github.com/thetarnav/streaming-markdown) to render markdown quick.
