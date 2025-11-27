@@ -46,7 +46,7 @@ function SidebarExpanded(props: {
     <div class="border-background-higher flex w-[255px] flex-col gap-4 border-r p-2 pr-3">
       <div class="flex justify-between">
         <Button variant="ghost" icon={true} onClick={() => props.chatManager.createNewChat()}>
-          <img src="open-llm-ui.svg" />
+          <img src="open-ollama-ui.svg" />
         </Button>
 
         <Button
@@ -122,7 +122,7 @@ function SidebarCollapsed(props: {
           onClick={() => props.setPreferences((current) => ({ ...current, sidebarExpanded: true }))}
           class="hover:[&>:nth-child(1)]:hidden hover:[&>:nth-child(2)]:block"
         >
-          <img src="open-llm-ui.svg" />
+          <img src="open-ollama-ui.svg" />
           <PanelLeftIcon class="hidden" />
         </Button>
       </div>

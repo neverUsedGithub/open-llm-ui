@@ -718,6 +718,16 @@ export class ChatManager {
       return untrack(() => this.getChat(chatId));
     });
 
+    createEffect(() => {
+      const current = this.currentChat();
+
+      if (current.id !== "") {
+        document.title = current.name();
+      } else {
+        document.title = "Open Ollama UI";
+      }
+    });
+
     this.loadChats();
     this.autoSave();
     this.loadModels();
