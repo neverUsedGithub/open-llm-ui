@@ -124,13 +124,13 @@ Combobox.Content = function ComboboxContent(props: { children: JSX.Element; clas
   ctx.contentElement = (
     <div
       class={cn(
-        "bg-background-default border-background-higher absolute z-30 flex max-h-128 w-64 flex-col overflow-y-auto rounded-2xl border-1 px-1.5 py-1.5",
+        "bg-background-default border-background-higher absolute z-30 flex max-h-128 w-64 flex-col rounded-2xl border-1 px-1.5 py-1.5",
         props.class,
       )}
     >
       {ctx.inputElement}
       <Combobox.Separator />
-      {props.children}
+      <div class="flex flex-col overflow-y-auto">{props.children}</div>
     </div>
   ) as HTMLElement;
 
@@ -184,7 +184,7 @@ Combobox.Separator = function ComboboxSeparator() {
 
 Combobox.Empty = function ComboboxEmpty(props: { children: JSX.Element; class?: string }) {
   return (
-    <div class={cn("text-foreground-muted hidden items-center justify-center gap-2 py-2 nth-[3]:flex", props.class)}>
+    <div class={cn("text-foreground-muted hidden items-center justify-center gap-2 py-2 nth-[1]:flex", props.class)}>
       <SearchXIcon class="size-4 translate-y-0.25" />
       {props.children}
     </div>
