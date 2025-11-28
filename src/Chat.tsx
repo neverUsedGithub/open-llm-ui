@@ -155,8 +155,8 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
     const tool = modelTools.find((tool) => tool.name === toolName)!;
 
     return (
-      <div class="text-foreground-muted flex items-center gap-2">
-        <Dynamic component={tool.icon} class="size-4" />
+      <div class="text-foreground-muted flex gap-2">
+        <Dynamic component={tool.icon} class="mt-1 size-4" />
         <span class="-translate-y-0.25">{props.subMessage.summary}</span>
       </div>
     );
