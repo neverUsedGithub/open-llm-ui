@@ -428,8 +428,12 @@ export class ChatManagerChat {
       if (capabilities.thinking) {
         useThinking = true;
 
-        if (currentTag && currentTag.id === "think" && selectedModel.includes("gpt-oss")) {
-          useThinking = "high";
+        if (selectedModel.includes("gpt-oss")) {
+          useThinking = "medium";
+
+          if (currentTag && currentTag.id === "think") {
+            useThinking = "high";
+          }
         }
       }
 
