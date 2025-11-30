@@ -18,10 +18,10 @@ You need to create a new environmental variable named `OLLAMA_ORIGINS` with the 
 
 - Streaming responses. (Ollama API)
 - Modern looking interface. (ChatGPT inspired)
-- Saved chats. (LocalStorage, IndexedDB possibly in the future)
+- Saved chats. (IndexedDB)
 - Tool support.
   - Image generation tool. (ComfyUI API)  
-    **Requires models installed in ComfyUI, see [workflows/qwen_image.json](./src/imagegen/workflows/qwen_image.json)**
+    **Requires models installed in ComfyUI, see [workflows/z_image_turbo.json](./src/imagegen/workflows/z_image_turbo.json)**
   - Web search tool. (Brave API + support extension)
   - Web fetch tool. (support extension)
   - File search tool.
