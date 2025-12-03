@@ -804,6 +804,7 @@ export class ChatManager {
     this.setChatId(chatId);
     this.currentChat().onOpen();
 
+    document.title = this.currentChat().name();
     window.location.hash = chatId;
   }
 
