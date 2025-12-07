@@ -1,4 +1,4 @@
-export async function comfyGenerateImage(workflow: any, comfyEndpoint: string): Promise<Blob> {
+export async function comfyGenerateImage(workflow: any, comfyEndpoint: string, signal?: AbortSignal): Promise<Blob> {
   const historyEndpoint = new URL("history/", comfyEndpoint);
   const promptEndpoint = new URL("prompt", comfyEndpoint);
   const queueEndpoint = new URL("queue", comfyEndpoint);
@@ -10,6 +10,7 @@ export async function comfyGenerateImage(workflow: any, comfyEndpoint: string): 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ prompt: workflow }),
+    signal,
   });
 
   if (!response.ok) {
@@ -22,7 +23,7 @@ export async function comfyGenerateImage(workflow: any, comfyEndpoint: string): 
   await new Promise<void>((res, rej) => {
     async function poll() {
       try {
-        const queueResponse = await fetch(queueEndpoint);
+        const queueResponse = await fetch(queueEndpoint, { signal });
 
         if (!queueResponse.ok) {
           throw new Error(`Failed to fetch queue status: ${queueResponse.statusText}`);
@@ -50,7 +51,7 @@ export async function comfyGenerateImage(workflow: any, comfyEndpoint: string): 
     poll();
   });
 
-  const historyResponse = await fetch(new URL(promptId, historyEndpoint));
+  const historyResponse = await fetch(new URL(promptId, historyEndpoint), { signal });
   if (!historyResponse.ok) {
     throw new Error(`Failed to fetch history: ${historyResponse.statusText}`);
   }

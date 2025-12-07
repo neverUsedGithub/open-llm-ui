@@ -142,7 +142,8 @@ export class ChatManagerChat {
   public selectedModelMetadata: Accessor<ModelMetadata | null>;
   private setSelectedModelMetadadata: Setter<ModelMetadata | null>;
 
-  private ollamaResponse: AbortableAsyncIterator<ChatResponse> | null;
+  private ollamaController: AbortableAsyncIterator<ChatResponse> | null;
+  private toolController: AbortController | null;
 
   public id: string;
   public loaded: boolean;
@@ -153,7 +154,8 @@ export class ChatManagerChat {
     this.loaded = false;
     this.ragDocuments = [];
 
-    this.ollamaResponse = null;
+    this.ollamaController = null;
+    this.toolController = null;
 
     [this.name, this.setName] = createSignal(name);
     [this.modelState, this.setModelState] = createSignal<ModelState>("idle");
@@ -270,13 +272,18 @@ export class ChatManagerChat {
       }
     }
 
+    this.toolController = new AbortController();
+
     const toolContext: ToolContext = {
       model,
       documents: this.ragDocuments,
       lastMessage: lastMessage,
+      signal: this.toolController.signal,
     };
 
     const result = await foundTool.execute(toolParams, toolContext);
+
+    this.toolController = null;
 
     for (const mock of mocks) assistantMessage.remove(mock);
 
@@ -344,7 +351,8 @@ export class ChatManagerChat {
   }
 
   public delete() {
-    if (this.ollamaResponse) this.ollamaResponse.abort();
+    this.abort();
+
     serializeChat.deleteChat(this.id);
     serializeChatList.deleteChat(this.id);
   }
@@ -361,7 +369,8 @@ export class ChatManagerChat {
   }
 
   public async abort() {
-    if (this.ollamaResponse) this.ollamaResponse.abort();
+    this.ollamaController?.abort();
+    this.toolController?.abort();
   }
 
   private async sendMessageImpl(
@@ -449,7 +458,7 @@ export class ChatManagerChat {
         }
       }
 
-      this.ollamaResponse = await ollama.chat({
+      this.ollamaController = await ollama.chat({
         messages: this.nativeMessages(),
         model: selectedModel,
         options: {
@@ -473,7 +482,7 @@ export class ChatManagerChat {
       let currentTextSubmessage: TextSubChatMessage | null = null;
 
       try {
-        for await (const part of this.ollamaResponse) {
+        for await (const part of this.ollamaController) {
           if (part.message.tool_calls) {
             this.addNativeMessage({
               role: "assistant",
@@ -638,7 +647,8 @@ ${JSON.stringify(result.data, null, 2)}
 
     assistantMessage.setState("finished");
     this.setModelState("idle");
-    this.ollamaResponse = null;
+    this.toolController = null;
+    this.ollamaController = null;
   }
 
   private async loadChat(): Promise<void> {

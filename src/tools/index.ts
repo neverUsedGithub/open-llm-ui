@@ -13,6 +13,50 @@ import ImagePlusIcon from "lucide-solid/icons/image-plus";
 import ollama from "ollama/browser";
 import TurndownService from "turndown";
 
+async function summarizeTextAbortable(ctx: ToolContext, document: string, query: string): Promise<string> {
+  const summaryModel = "qwen3:4b-instruct-2507-q8_0";
+
+  // TODO: the initial loading time of the summarizer model CANNOT be aborted currently.
+  const summaryResponse = await ollama.chat({
+    model: summaryModel,
+    stream: true,
+    options: {
+      num_ctx: 32_000,
+      temperature: 0.35,
+    },
+    messages: [
+      {
+        role: "user",
+        content: `You are an assistant that applies the user's query to a large document.
+
+User query:
+"${query}"
+
+Document:
+\`\`\`
+${document}
+\`\`\`
+
+Instructions:
+1. Identify only the information in the document that directly relates to the user's query.
+2. Ignore unrelated content; do not invent answers.
+3. Provide the extracted information in a concise, structured manner suitable for the main model to use.
+
+Output only the extracted information.`,
+      },
+    ],
+  });
+
+  let summary = "";
+
+  for await (const part of summaryResponse) {
+    ctx.signal.throwIfAborted();
+    summary += part.message.content;
+  }
+
+  return summary;
+}
+
 export const modelTools: ModelTool[] = [
   {
     name: "calculator",
@@ -32,8 +76,8 @@ export const modelTools: ModelTool[] = [
 
     async execute(properties: { expression: string }) {
       const exprRegex = /^[\d\.\+\-\*\/\(\) ]*$/;
-      if (!exprRegex.test(properties.expression)) return { data: "ERROR: invalid expression" };
-      return { data: eval(properties.expression) };
+      if (!exprRegex.test(properties.expression)) return { data: { ok: false, error: "invalid expression" } };
+      return { data: { ok: true, result: eval(properties.expression) } };
     },
   },
   {
@@ -95,6 +139,7 @@ Refinement Process:
         width: properties.width ?? 512,
         height: properties.height ?? 512,
         quality: properties.quality ?? "medium",
+        signal: ctx.signal,
       });
 
       return {
@@ -106,56 +151,89 @@ Refinement Process:
       };
     },
   },
-  // {
-  //   name: "code_interpreter",
-  //   icon: BinaryIcon,
-  //   summary: "Executing a piece of code.",
-  //   description: `Executes a Python code snippet in a hidden, non-visible, internal runtime environment. Only Python is supported (version 3.10). The execution environment may not have internet access, and its file system is non-persistent — all files are cleared between calls. Code executed with this tool is never shown to the user, so do not use it to run code the user asked you to provide unless they explicitly request execution or testing. Only call this tool when it is genuinely required to answer the user’s request or when it is a necessary step in your internal reasoning; do not call it unnecessarily or speculatively.`,
-  //   parameters: {
-  //     type: "object",
-  //     properties: {
-  //       code: {
-  //         type: "string",
-  //         description: "The code snippet to execute.",
-  //       },
-  //     },
+  {
+    name: "python",
+    icon: BinaryIcon,
+    summary: "Executing a piece of code.",
+    description: `You should only use this tool for internal reasoning. Executes a Python code snippet in a hidden, non-visible, internal runtime environment. Only Python is supported (version 3.10). The execution environment may not have internet access, and its file system is non-persistent — all files are cleared between calls. Code executed with this tool is never shown to the user, so do not use it to run code the user asked you to provide unless they explicitly request execution or testing. Only call this tool when it is genuinely required to answer the user’s request or when it is a necessary step in your internal reasoning; do not call it unnecessarily or speculatively.`,
+    parameters: {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          description: "The code snippet to execute.",
+        },
+      },
 
-  //     required: ["code"],
-  //   },
+      required: ["code"],
+    },
 
-  //   mockOutput: [],
+    mockOutput: [],
 
-  //   async execute(properties: { code: string }) {
-  //     const res = await fetch("https://emkc.org/api/v2/piston/execute", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({
-  //         language: "python",
-  //         version: "3.10",
-  //         files: [
-  //           {
-  //             name: "main.py",
-  //             content: properties.code,
-  //           },
-  //         ],
-  //         stdin: "",
-  //         args: [],
-  //       }),
-  //     });
+    async execute(properties: { code: string }, ctx: ToolContext) {
+      const res = await fetch("https://emkc.org/api/v2/piston/execute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          language: "python",
+          version: "3.10",
+          files: [
+            {
+              name: "main.py",
+              content: `
+import ast
+import pprint
+from typing import Any
 
-  //     const data = await res.json();
+def run_snippet(code: str) -> None:
+  tree = ast.parse(code, mode='exec')
 
-  //     if (!res.ok) {
-  //       throw new Error("code execution failed");
-  //     }
+  for i in range(len(tree.body) - 1, -1, -1):
+    stat = tree.body[i]
+    if isinstance(stat, ast.FunctionDef):
+      tree.body.insert(i, ast.Global(names=[stat.name]))
 
-  //     return {
-  //       data: { code: data.run.code, output: data.run.output },
-  //     };
-  //   },
-  // },
+  ast.fix_missing_locations(tree)
+
+  if isinstance(tree.body[-1], ast.Expr):
+    new_locals: dict[str, Any] = {}
+    new_globals: dict[str, Any] = {}
+
+    last_expr = ast.Expression(tree.body[-1].value)
+    expr_head = ast.Module(tree.body[:-1], [])
+
+    exec(compile(expr_head, filename="<file>", mode="exec"), new_globals, new_locals)
+
+    new_globals.update(new_locals)
+    result = eval(compile(last_expr, filename="<file>", mode="eval"), new_globals, {})
+
+    if result != None:
+      pprint.pp(result)
+  else:
+    exec(compile(tree, filename="<file>", mode="exec"))
+
+run_snippet(${JSON.stringify(properties.code)})`,
+            },
+          ],
+          stdin: "",
+          args: [],
+        }),
+        signal: ctx.signal,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error("code execution failed");
+      }
+
+      return {
+        data: { code: data.run.code, output: data.run.output },
+      };
+    },
+  },
   {
     name: "web_search",
     icon: GlobeIcon,
@@ -212,7 +290,7 @@ Refinement Process:
       return isExtensionInstalled();
     },
 
-    async execute(properties: { url: string; query?: string }) {
+    async execute(properties: { url: string; query?: string }, ctx: ToolContext) {
       try {
         const dataHTML = await extensionApi.fetchText(properties.url);
         const dataDOM = new DOMParser().parseFromString(dataHTML, "text/html");
@@ -254,37 +332,7 @@ Refinement Process:
           dataDOM.body;
 
         const output = turndown.turndown(contentEl);
-
-        const summaryModel = "qwen3:4b-instruct-2507-q8_0";
-        const summarized = await ollama.chat({
-          model: summaryModel,
-          stream: false,
-          options: {
-            num_ctx: 32_000,
-          },
-          messages: [
-            {
-              role: "user",
-              content: `You are an assistant that applies the user's query to a large document.
-
-User query:
-"${properties.query ?? "Summarize this web page."}"
-
-Document:
-\`\`\`markdown
-${output}
-\`\`\`
-
-Instructions:
-1. Identify only the information in the document that directly relates to the user's query.
-2. Ignore unrelated content; do not invent answers.
-3. Provide the extracted information in a concise, structured manner suitable for the main model to use.
-
-Output only the extracted information.`,
-            },
-            { role: "user", content: output },
-          ],
-        });
+        const summary = await summarizeTextAbortable(ctx, output, ctx.lastMessage);
 
         const furtherLinks = links.slice(0, 5);
 
@@ -292,7 +340,7 @@ Output only the extracted information.`,
           url: properties.url,
           title,
           links: furtherLinks,
-          content: summarized.message.content,
+          content: summary,
         });
 
         return {
@@ -300,7 +348,7 @@ Output only the extracted information.`,
             url: properties.url,
             title,
             links: furtherLinks,
-            content: summarized.message.content,
+            content: summary,
           },
         };
       } catch (e) {
@@ -338,14 +386,14 @@ Output only the extracted information.`,
       required: ["document_id", "query"],
     },
 
-    async execute(properties: { document_id: number; query: string[] }, context) {
-      if (properties.document_id < 0 || properties.document_id >= context.documents.length) {
+    async execute(properties: { document_id: number; query: string[] }, ctx: ToolContext) {
+      if (properties.document_id < 0 || properties.document_id >= ctx.documents.length) {
         return {
           data: "Invalid `document_id` provided. Please check if the user has provided a document with that id.",
         };
       }
 
-      const contextDocument = context.documents[properties.document_id];
+      const contextDocument = ctx.documents[properties.document_id];
       let matches: vectordb.DBQueryResult[] = [];
 
       for (const query of properties.query) {
@@ -372,39 +420,18 @@ Output only the extracted information.`,
         }
       }
 
-      const response = await ollama.chat({
-        model: "qwen3:4b-instruct-2507-q8_0",
-        options: {
-          num_ctx: 32_000,
-        },
-        messages: [
-          {
-            role: "user",
-            content: `You are an assistant that extracts relevant information from document chunks.
-
-User query:
-"${context.lastMessage}"
-
-Document chunks:
-${top.map((chunk, i) => `${i + 1}. ${chunk}`).join("\n")}
-
-Instructions:
-1. Identify only the information in the chunks that directly relates to the user's query.
-2. Ignore unrelated content; do not invent answers.
-3. Provide the extracted information in a concise, structured manner suitable for the main model to use.
-4. If no chunks contain relevant information, respond with "No relevant information found."
-
-Output only the extracted information.`,
-          },
-        ],
-      });
+      const summary = await summarizeTextAbortable(
+        ctx,
+        top.map((chunk, i) => `${i + 1}. ${chunk}`).join("\n\n"),
+        properties.query.join(", "),
+      );
 
       console.log(top);
       console.log("extracted");
-      console.log(response.message.content);
+      console.log(summary);
 
       return {
-        data: response.message.content,
+        data: summary,
       };
     },
   },
@@ -427,34 +454,24 @@ Output only the extracted information.`,
       required: ["document_id"],
     },
 
-    async execute(properties: { document_id: number }, context) {
-      if (properties.document_id < 0 || properties.document_id >= context.documents.length) {
+    async execute(properties: { document_id: number }, ctx: ToolContext) {
+      if (properties.document_id < 0 || properties.document_id >= ctx.documents.length) {
         return {
           data: "Invalid `document_id` provided. Please check if the user has provided a document with that id.",
         };
       }
 
-      const contextDocument = context.documents[properties.document_id];
+      const contextDocument = ctx.documents[properties.document_id];
       const stitched = contextDocument.chunks.join("");
 
-      const response = await ollama.chat({
-        model: "qwen3:4b-instruct-2507-q8_0",
-        options: {
-          num_ctx: 32_000,
-        },
-        messages: [
-          {
-            role: "user",
-            content: `Summarize the following document in english, keeping important facts and information. Do not leave out important information like task numbers or markers. Respond ONLY with the summary. Don't reaffirm or provide any other commentary.
-
-Document:
-${stitched}`,
-          },
-        ],
-      });
+      const summary = await summarizeTextAbortable(
+        ctx,
+        stitched,
+        "Summarize the following document in english, keeping important facts and information. Do not leave out important information like task numbers or markers. Respond ONLY with the summary. Don't reaffirm or provide any other commentary.",
+      );
 
       return {
-        data: response.message.content,
+        data: summary,
       };
     },
   },

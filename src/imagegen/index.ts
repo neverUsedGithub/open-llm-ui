@@ -69,6 +69,7 @@ export interface GenImageOptions {
   width: number;
   height: number;
   quality: GenImageQuality;
+  signal: AbortSignal;
 }
 
 export async function generateImage(prompt: string, options?: GenImageOptions): Promise<Blob> {
@@ -79,7 +80,7 @@ export async function generateImage(prompt: string, options?: GenImageOptions): 
     options?.height ?? 512,
     options?.quality ?? "medium",
   );
-  const image = await comfyGenerateImage(workflow, "http://localhost:8000");
+  const image = await comfyGenerateImage(workflow, "http://localhost:8000", options?.signal);
 
   // Free up vram for ollama.
   // TODO: for high vram users add an option to disable this.

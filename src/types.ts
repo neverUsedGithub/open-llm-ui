@@ -157,6 +157,7 @@ export interface ModelTool {
 
 export interface ToolContext {
   model: string;
+  signal: AbortSignal;
   lastMessage: string;
   documents: RAGDocument[];
 }
