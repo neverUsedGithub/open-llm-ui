@@ -339,7 +339,14 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
 }
 
 function UserFileView(props: { file: UserFile }) {
-  if (props.file.kind === "image") return null;
+  if (props.file.kind === "image") {
+    return (
+      <img
+        class="ml-6 w-full rounded-2xl sm:w-1/2"
+        src={URL.createObjectURL(new Blob([props.file.content as BlobPart]))}
+      />
+    );
+  }
 
   const fileProgress = createMemo(() => Math.round((props.file as UserDocumentFile).progress() * 100));
 

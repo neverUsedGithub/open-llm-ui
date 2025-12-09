@@ -62,24 +62,22 @@ export async function loadChat(chatId: string): Promise<
       const userFiles: UserFile[] = [];
 
       for (const file of message.files) {
-        const bytes = new TextEncoder().encode(atob(file.data));
+        const bytes = Uint8Array.fromBase64(file.data);
 
         if (file.kind === "image") {
           userFiles.push({
             kind: "image",
             fileName: file.fileName,
             content: bytes,
-            encoded: await ollama.encodeImage(bytes),
+            encoded: file.data,
           });
         } else {
-          const [progress, setProgress] = runWithOwner(null, () => createSignal(1))!;
-
           userFiles.push({
             kind: "document",
             fileName: file.fileName,
             content: bytes,
-            progress,
-            setProgress,
+            progress: () => 1,
+            setProgress: () => {},
           });
         }
       }
@@ -173,9 +171,7 @@ export async function saveChat(
           saveFiles.push({
             kind: "document",
             fileName: file.fileName,
-            // So uh, encodeImage accepts arbitrary binary data, so this should be okay?
-            // Don't know about encoding it on every save request though.
-            data: await ollama.encodeImage(file.content),
+            data: file.content.toBase64(),
           });
         }
       }
