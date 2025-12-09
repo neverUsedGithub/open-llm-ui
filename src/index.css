@@ -19,6 +19,7 @@ pre {
 
   --color-foreground: #ffffff;
   --color-foreground-muted: #888888;
+  --color-foreground-muted-glow: #aaaaaa;
 
   --color-accent-default: #84bbfa;
   --color-accent-overlay: #3c97ff34;
@@ -49,5 +50,30 @@ pre {
     100% {
       transform: scale(1);
     }
+  }
+}
+
+.animate-glow {
+  background-size: 200% auto;
+  background-clip: text;
+  background-image: linear-gradient(
+    to right,
+    var(--color-foreground-muted),
+    var(--color-foreground-muted-glow),
+    var(--color-foreground-muted-glow),
+    var(--color-foreground-muted)
+  );
+
+  background-clip: text;
+  text-fill-color: transparent;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  animation: 2s glow-animation linear infinite;
+}
+
+@keyframes glow-animation {
+  to {
+    background-position: -200% center;
   }
 }

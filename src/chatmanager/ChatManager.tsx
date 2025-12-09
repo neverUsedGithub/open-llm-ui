@@ -4,9 +4,6 @@ import * as serializeChat from "@/serialization/chat";
 import * as serializeChatList from "@/serialization/chatList";
 import type {
   AssistantChatMessage,
-  AttachmentSubChatMessage,
-  ChatData,
-  ChatMessageAttachment,
   ChatMessageState,
   DisplayChatMessage,
   InputTag,
