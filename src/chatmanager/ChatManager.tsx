@@ -1,8 +1,7 @@
 import { extractPDF } from "@/documents/pdf";
 import * as embedding from "@/embedding";
 import { ProviderManager } from "@/providers";
-import { OllamaProvider } from "@/providers/ollama";
-import type { ModelProvider } from "@/providers/provider";
+import { v4 as uuidv4 } from "uuid";
 import * as serializeChat from "@/serialization/chat";
 import * as serializeChatList from "@/serialization/chatList";
 import type {
@@ -728,10 +727,7 @@ class ChatManagerNewChat extends ChatManagerChat {
 
   public onCreate: (() => void) | null;
 
-  constructor(
-    chatManager: ChatManager,
-    preferences: UserPreferences
-  ) {
+  constructor(chatManager: ChatManager, preferences: UserPreferences) {
     super(chatManager, "", "", null, preferences);
 
     this.created = false;
@@ -746,7 +742,7 @@ class ChatManagerNewChat extends ChatManagerChat {
   }
 
   private createNew(userMessage: string) {
-    this.id = crypto.randomUUID();
+    this.id = uuidv4();
     this.setName(userMessage.substring(0, 40));
 
     this.onCreate?.();
