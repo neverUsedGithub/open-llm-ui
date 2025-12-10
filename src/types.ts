@@ -1,6 +1,6 @@
-import type { LucideProps } from "lucide-solid";
-import type { ShowResponse, ToolCall } from "ollama/browser";
+import type { ModelProvider } from "./providers/provider";
 import type { Accessor, JSX, Setter } from "solid-js";
+import type { LucideProps } from "lucide-solid";
 import type { VectorDB } from "./vectordb";
 
 export interface PromptTemplate {
@@ -156,10 +156,11 @@ export interface ModelTool {
 }
 
 export interface ToolContext {
-  model: string;
+  model: ListedModel;
   signal: AbortSignal;
   lastMessage: string;
   documents: RAGDocument[];
+  freeModel(model: ListedModel): Promise<void>;
 }
 
 export interface RAGDocument {
@@ -170,6 +171,7 @@ export interface RAGDocument {
 
 export interface ChatData {
   model: string;
+  provider: string;
   name: string;
   id: string;
 }
@@ -192,6 +194,26 @@ export interface ModelMetadata {
 
 export interface UserPreferences {
   defaultModel: string;
+  defaultProvider: string;
   chatsExpanded: boolean;
   sidebarExpanded: boolean;
 }
+
+export interface ListedModel {
+  identifier: string;
+  provider: string;
+}
+
+export interface ToolCall {
+  function: {
+    name: string;
+    arguments: {
+      [key: string]: any;
+    };
+  };
+}
+
+export type StreamChunk =
+  | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "toolCalls"; toolCalls: ToolCall[] };

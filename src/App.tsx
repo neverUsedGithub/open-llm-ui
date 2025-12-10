@@ -1,4 +1,14 @@
-import { createEffect, createSignal, For, Show, type Accessor, type JSX, type Setter } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  getOwner,
+  runWithOwner,
+  Show,
+  type Accessor,
+  type JSX,
+  type Setter,
+} from "solid-js";
 import { ChatView } from "./Chat";
 
 import ChevronRightIcon from "lucide-solid/icons/chevron-right";
@@ -13,7 +23,7 @@ import { Dropdown } from "./components/Dropdown";
 import { cn } from "./util/cn";
 import { Combobox } from "./components/Combobox";
 import { Button } from "./components/Button";
-import { loadPreferences, savePreferences } from "./serialization/preferences";
+import { loadPreferences, savePreference } from "./serialization/preferences";
 import type { UserPreferences } from "./types";
 import { database } from "./indexeddb";
 import { basePreferences } from "./util/constant";
@@ -39,11 +49,7 @@ function ChatItem(props: { children: JSX.Element; onClick: () => void; class?: s
   );
 }
 
-function SidebarExpanded(props: {
-  chatManager: ChatManager;
-  preferences: UserPreferences;
-  setPreferences: Setter<UserPreferences>;
-}) {
+function SidebarExpanded(props: { chatManager: ChatManager; preferences: UserPreferences }) {
   return (
     <div class="border-background-higher flex w-[255px] flex-col gap-4 border-r p-2 pr-3">
       <div class="flex justify-between">
@@ -51,11 +57,7 @@ function SidebarExpanded(props: {
           <img src="open-ollama-ui.svg" />
         </Button>
 
-        <Button
-          variant="ghost"
-          icon={true}
-          onClick={() => props.setPreferences((current) => ({ ...current, sidebarExpanded: false }))}
-        >
+        <Button variant="ghost" icon={true} onClick={() => (props.preferences.sidebarExpanded = false)}>
           <PanelLeftIcon />
         </Button>
       </div>
@@ -68,7 +70,7 @@ function SidebarExpanded(props: {
       <div class="flex flex-col gap-2">
         <button
           class="text-foreground-muted ml-2 flex cursor-pointer items-center gap-1 text-sm"
-          onClick={() => props.setPreferences((current) => ({ ...current, chatsExpanded: !current.chatsExpanded }))}
+          onClick={() => (props.preferences.chatsExpanded = !props.preferences.chatsExpanded)}
         >
           Your chats
           <Show when={props.preferences.chatsExpanded}>
@@ -110,18 +112,14 @@ function SidebarExpanded(props: {
   );
 }
 
-function SidebarCollapsed(props: {
-  chatManager: ChatManager;
-  preferences: UserPreferences;
-  setPreferences: Setter<UserPreferences>;
-}) {
+function SidebarCollapsed(props: { chatManager: ChatManager; preferences: UserPreferences }) {
   return (
     <div class="flex flex-col gap-4 px-2 py-2">
       <div class="flex flex-col gap-2">
         <Button
           variant="ghost"
           icon={true}
-          onClick={() => props.setPreferences((current) => ({ ...current, sidebarExpanded: true }))}
+          onClick={() => (props.preferences.sidebarExpanded = true)}
           class="hover:[&>:nth-child(1)]:hidden hover:[&>:nth-child(2)]:block"
         >
           <img src="open-ollama-ui.svg" />
@@ -137,32 +135,54 @@ function SidebarCollapsed(props: {
   );
 }
 
-function promiseSignal<T>(promise: Promise<T>, defaultValue: T): [Accessor<T>, Setter<T>] {
-  const [get, set] = createSignal(defaultValue);
+function usePreferences(): UserPreferences {
+  const reactivePreferences: Record<string, unknown> = {};
+  let loaded = false;
 
-  // @ts-expect-error
-  promise.then((value) => set(value));
+  for (const key in basePreferences) {
+    const [getSignal, setSignal] = createSignal<unknown>((basePreferences as unknown as Record<string, unknown>)[key]);
 
-  return [get, set];
+    Object.defineProperty(reactivePreferences, key, {
+      enumerable: true,
+
+      get: () => getSignal(),
+      set: (v) => setSignal(v),
+    });
+
+    createEffect(() => {
+      const value = getSignal();
+
+      if (!loaded) return;
+      savePreference(key as keyof UserPreferences, value as UserPreferences[keyof UserPreferences]);
+    });
+  }
+
+  loadPreferences()
+    .then((preferences) => {
+      for (const key in preferences) {
+        reactivePreferences[key] = (preferences as unknown as Record<string, unknown>)[key];
+      }
+    })
+    .finally(() => (loaded = true));
+
+  return reactivePreferences as unknown as UserPreferences;
 }
 
 export default function App() {
-  const [preferences, setPreferences] = promiseSignal(loadPreferences(), basePreferences);
-  const chatManager = ChatManager.getInstance(preferences, setPreferences);
+  const preferences = usePreferences();
+  const chatManager = ChatManager.getInstance(preferences);
 
   // @ts-expect-error
   window.database = database;
 
-  createEffect(() => savePreferences(preferences()));
-
   return (
     <div class="flex">
-      <Show when={preferences().sidebarExpanded}>
-        <SidebarExpanded chatManager={chatManager} preferences={preferences()} setPreferences={setPreferences} />
+      <Show when={preferences.sidebarExpanded}>
+        <SidebarExpanded chatManager={chatManager} preferences={preferences} />
       </Show>
 
-      <Show when={!preferences().sidebarExpanded}>
-        <SidebarCollapsed chatManager={chatManager} preferences={preferences()} setPreferences={setPreferences} />
+      <Show when={!preferences.sidebarExpanded}>
+        <SidebarCollapsed chatManager={chatManager} preferences={preferences} />
       </Show>
 
       <div class="flex h-screen max-h-screen flex-1 flex-col">
@@ -170,15 +190,18 @@ export default function App() {
           <Combobox>
             <Combobox.Trigger>
               <Button variant="ghost">
-                {chatManager.currentChat().currentModel()}
+                {chatManager.currentChat().currentModel().identifier}
                 <ChevronDownIcon class="text-foreground-muted size-4" />
               </Button>
             </Combobox.Trigger>
             <Combobox.Content class="top-full mt-2">
               <For each={chatManager.availableModels()}>
                 {(model) => (
-                  <Combobox.Item value={model} onSelect={() => chatManager.currentChat().setCurrentModel(model)}>
-                    {model}
+                  <Combobox.Item
+                    value={`${model.identifier}@${model.provider}`}
+                    onSelect={() => chatManager.currentChat().setCurrentModel(model)}
+                  >
+                    {model.identifier}
                   </Combobox.Item>
                 )}
               </For>
@@ -204,7 +227,7 @@ export default function App() {
           </Show>
         </div>
         <div class="flex-1 overflow-y-auto">
-          <ChatView chat={chatManager.currentChat()} />
+          <ChatView manager={chatManager} chat={chatManager.currentChat()} />
         </div>
       </div>
     </div>

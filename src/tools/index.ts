@@ -3,7 +3,6 @@ import * as imageGen from "@/imagegen";
 import { BraveSearchProvider } from "@/search/providers/brave";
 import type { ModelTool, ToolContext } from "@/types";
 import { extensionApi, isExtensionInstalled } from "@/util/extension";
-import { freeOllamaModel } from "@/util/ollama";
 import * as vectordb from "@/vectordb";
 import BinaryIcon from "lucide-solid/icons/binary";
 import BookOpenText from "lucide-solid/icons/book-open-text";
@@ -133,7 +132,7 @@ Refinement Process:
     ) {
       // Free up vram for comfy.
       // TODO: for high vram users add an option to disable this.
-      await freeOllamaModel(ctx.model);
+      await ctx.freeModel(ctx.model);
 
       const imageBlob = await imageGen.generateImage(properties.prompt, {
         width: properties.width ?? 512,

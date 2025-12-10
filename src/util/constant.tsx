@@ -94,4 +94,5 @@ export const basePreferences: UserPreferences = {
   chatsExpanded: true,
   sidebarExpanded: true,
   defaultModel: "gpt-oss:20b",
+  defaultProvider: "ollama"
 };

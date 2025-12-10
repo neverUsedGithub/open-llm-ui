@@ -15,7 +15,6 @@ import type {
 } from "@/types";
 import { cn } from "@/util/cn";
 import { promptTemplates } from "@/util/constant";
-import { freeOllamaModel } from "@/util/ollama";
 import hljs from "highlight.js";
 import katex from "katex";
 import ArrowUpIcon from "lucide-solid/icons/arrow-up";
@@ -28,13 +27,12 @@ import SquareIcon from "lucide-solid/icons/square";
 import TriangleAlert from "lucide-solid/icons/triangle-alert";
 import FileIcon from "lucide-solid/icons/file";
 import XIcon from "lucide-solid/icons/x";
-import ollama from "ollama/browser";
 import * as pdfjs from "pdfjs-dist";
 import pdfjsWorkerURL from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import * as streamingMarkdown from "streaming-markdown";
-import type { ChatManagerChat } from "./chatmanager/ChatManager";
+import type { ChatManager, ChatManagerChat } from "./chatmanager/ChatManager";
 import { inputTags } from "./inputtags";
 import { modelTools } from "./tools";
 
@@ -432,6 +430,7 @@ function InputTagButton(props: { tag: string; toggleTag: (tag: string) => void }
 
 export interface ChatViewProps {
   chat: ChatManagerChat;
+  manager: ChatManager;
 }
 
 export function ChatView(props: ChatViewProps) {
@@ -567,11 +566,10 @@ export function ChatView(props: ChatViewProps) {
   }
 
   async function freeLoadedModels() {
-    const runningModels = await ollama.ps();
-    for (const model of runningModels.models) {
-      await freeOllamaModel(model.name);
+    for (const model of await props.manager.providerManager.listRunningModels()) {
+      const provider = await props.manager.providerManager.getProvider(model.provider);
+      provider?.freeModel(model.identifier);
     }
-
     await imageGen.freeResources();
   }
 
@@ -597,7 +595,7 @@ export function ChatView(props: ChatViewProps) {
             kind: "image",
             fileName: file.name,
             content: bytes,
-            encoded: await ollama.encodeImage(bytes),
+            encoded: bytes.toBase64(),
           });
         }
       }
@@ -649,7 +647,9 @@ export function ChatView(props: ChatViewProps) {
         <Show when={chatHistoryEmpty()}>
           <div class={cn("mb-8 flex h-1/2 items-end justify-center gap-4", userFileUploads().length > 0 && "mb-24")}>
             <img src="open-ollama-ui.svg" alt="" class="size-12" />
-            <h2 class="font-handwriting line-clamp-1 max-w-72 -translate-y-1 text-4xl">{props.chat.currentModel()}</h2>
+            <h2 class="font-handwriting line-clamp-1 max-w-72 -translate-y-1 text-4xl">
+              {props.chat.currentModel().identifier}
+            </h2>
           </div>
         </Show>
 

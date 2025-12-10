@@ -1,5 +1,8 @@
 import { extractPDF } from "@/documents/pdf";
 import * as embedding from "@/embedding";
+import { ProviderManager } from "@/providers";
+import { OllamaProvider } from "@/providers/ollama";
+import type { ModelProvider } from "@/providers/provider";
 import * as serializeChat from "@/serialization/chat";
 import * as serializeChatList from "@/serialization/chatList";
 import type {
@@ -7,12 +10,14 @@ import type {
   ChatMessageState,
   DisplayChatMessage,
   InputTag,
+  ListedModel,
   MockOutputField,
   ModelMetadata,
   ModelState,
   ModelTool,
   NativeChatMessage,
   RAGDocument,
+  StreamChunk,
   SubChatMessage,
   SubChatMessageData,
   TextSubChatMessage,
@@ -25,8 +30,6 @@ import type {
 } from "@/types";
 import { buildSystemPrompt } from "@/util/prompt";
 import * as vectordb from "@/vectordb";
-import type { AbortableAsyncIterator } from "ollama";
-import ollama, { type ChatResponse } from "ollama/browser";
 import { createEffect, createMemo, createSignal, runWithOwner, untrack, type Accessor, type Setter } from "solid-js";
 
 function noop() {}
@@ -133,32 +136,41 @@ export class ChatManagerChat {
   public name: Accessor<string>;
   protected setName: Setter<string>;
 
-  private selectedModel: Accessor<string | null>;
-  private setSelectedModel: Setter<string | null>;
+  private selectedModel: Accessor<ListedModel | null>;
+  private setSelectedModel: Setter<ListedModel | null>;
 
-  public currentModel: Accessor<string>;
+  public currentModel: Accessor<ListedModel>;
 
   public selectedModelMetadata: Accessor<ModelMetadata | null>;
   private setSelectedModelMetadadata: Setter<ModelMetadata | null>;
 
-  private ollamaController: AbortableAsyncIterator<ChatResponse> | null;
+  private providerController: AbortController | null;
   private toolController: AbortController | null;
+
+  private chatManager: ChatManager;
 
   public id: string;
   public loaded: boolean;
   public ragDocuments: RAGDocument[];
 
-  constructor(id: string, name: string, model: string | null, preferences: Accessor<UserPreferences>) {
+  constructor(
+    chatManager: ChatManager,
+    id: string,
+    name: string,
+    model: ListedModel | null,
+    preferences: UserPreferences,
+  ) {
     this.id = id;
     this.loaded = false;
     this.ragDocuments = [];
+    this.chatManager = chatManager;
 
-    this.ollamaController = null;
     this.toolController = null;
+    this.providerController = null;
 
     [this.name, this.setName] = createSignal(name);
     [this.modelState, this.setModelState] = createSignal<ModelState>("idle");
-    [this.selectedModel, this.setSelectedModel] = createSignal<string | null>(model);
+    [this.selectedModel, this.setSelectedModel] = createSignal<ListedModel | null>(model);
     [this.selectedModelMetadata, this.setSelectedModelMetadadata] = createSignal<ModelMetadata | null>(null);
 
     [this.nativeMessages, this.setNativeMessages] = createSignal<NativeChatMessage[]>([]);
@@ -166,7 +178,11 @@ export class ChatManagerChat {
 
     this.currentModel = createMemo(() => {
       const selectedModel = this.selectedModel();
-      const defaultModel = preferences().defaultModel;
+
+      const defaultModel: ListedModel = {
+        identifier: preferences.defaultModel,
+        provider: preferences.defaultProvider,
+      };
 
       return selectedModel ?? defaultModel;
     });
@@ -179,24 +195,18 @@ export class ChatManagerChat {
     });
   }
 
-  public setCurrentModel(model: string) {
+  public setCurrentModel(model: ListedModel) {
     this.setSelectedModel(model);
   }
 
-  private async loadModelMetadata(model: string) {
-    const meta = await ollama.show({ model });
+  private async loadModelMetadata(model: ListedModel) {
+    const provider = await this.chatManager.providerManager.getProvider(model.provider);
 
-    this.setSelectedModelMetadadata({
-      capabilities: {
-        tools: meta.capabilities.includes("tools"),
-        thinking: meta.capabilities.includes("thinking"),
-      },
-      details: {
-        family: meta.details.family,
-        parameterSize: meta.details.parameter_size,
-        quantizationLevel: meta.details.quantization_level,
-      },
-    });
+    if (provider) {
+      this.setSelectedModelMetadadata(await provider.queryModel(model.identifier));
+    } else {
+      console.warn("failed to load model metadata, provider is null", model);
+    }
   }
 
   private autoSave() {
@@ -248,7 +258,7 @@ export class ChatManagerChat {
   }
 
   private async runModelTool(
-    model: string,
+    model: ListedModel,
     assistantMessage: AssistantChatMessage,
     supportedTools: ModelTool[],
     lastMessage: string,
@@ -287,6 +297,11 @@ export class ChatManagerChat {
       documents: this.ragDocuments,
       lastMessage: lastMessage,
       signal: this.toolController.signal,
+
+      freeModel: async (model) => {
+        const provider = await this.chatManager.providerManager.getProvider(model.provider);
+        if (provider) await provider.freeModel(model.identifier);
+      },
     };
 
     const result = await foundTool.execute(toolParams, toolContext);
@@ -366,7 +381,7 @@ export class ChatManagerChat {
   }
 
   public sendMessage(
-    selectedModel: string,
+    selectedModel: ListedModel,
     userMessage: string,
     fileUploads: UserFile[],
     tools: ModelTool[],
@@ -377,12 +392,12 @@ export class ChatManagerChat {
   }
 
   public async abort() {
-    this.ollamaController?.abort();
+    this.providerController?.abort();
     this.toolController?.abort();
   }
 
   private async sendMessageImpl(
-    selectedModel: string,
+    selectedModel: ListedModel,
     userMessage: string,
     fileUploads: UserFile[],
     tools: ModelTool[],
@@ -440,140 +455,164 @@ export class ChatManagerChat {
 
     let errored = false;
     let error: unknown = null;
+    let useThinking: boolean | "low" | "medium" | "high" = false;
 
-    turnLoop: do {
-      newTurn = false;
+    if (capabilities.thinking) {
+      useThinking = true;
 
-      const runningModels = await ollama.ps();
+      // TODO: improve gpt-oss detection, probably family field in metadata?
+      if (selectedModel.identifier.includes("gpt-oss")) {
+        useThinking = "medium";
 
-      if (!runningModels.models.find((model) => model.model === selectedModel)) {
-        this.setModelState("loading");
-        assistantMessage.setState("loading");
-      }
-
-      let useThinking: boolean | "low" | "medium" | "high" = false;
-
-      if (capabilities.thinking) {
-        useThinking = true;
-
-        // TODO: improve gpt-oss detection, probably family field in metadata?
-        if (selectedModel.includes("gpt-oss")) {
-          useThinking = "medium";
-
-          if (currentTag && currentTag.id === "think") {
-            useThinking = "high";
-          }
+        if (currentTag && currentTag.id === "think") {
+          useThinking = "high";
         }
       }
+    }
 
-      this.ollamaController = await ollama.chat({
-        messages: this.nativeMessages(),
-        model: selectedModel,
-        options: {
-          num_ctx: 16_000,
-        },
-        tools: capabilities.tools
-          ? tools.map((tool) => ({
-              type: "function",
-              function: tool,
-            }))
-          : undefined,
-        stream: true,
-        think: useThinking,
-      });
+    do {
+      newTurn = false;
+
+      // const runningModels = await ollama.ps();
+
+      // if (!runningModels.models.find((model) => model.model === selectedModel)) {
+      this.setModelState("loading");
+      assistantMessage.setState("loading");
+      // }
+
+      const controller = new AbortController();
+      this.providerController = controller;
+
+      // ({
+      //   messages: this.nativeMessages(),
+      //   model: selectedModel,
+      //   options: {
+      //     num_ctx: 16_000,
+      //   },
+      //   tools: capabilities.tools
+      //     ? tools.map((tool) => ({
+      //         type: "function",
+      //         function: tool,
+      //       }))
+      //     : undefined,
+      //   stream: true,
+      //   think: useThinking,
+      // });
+
+      const self = this;
 
       let isToolCall = false;
 
       let textContent = "";
       let thinkingContent = "";
 
-      let currentTextSubmessage: TextSubChatMessage | null = null;
+      let currentTextSubmessage: TextSubChatMessage | null = null as TextSubChatMessage | null;
 
-      try {
-        for await (const part of this.ollamaController) {
-          if (part.message.tool_calls) {
-            this.addNativeMessage({
-              role: "assistant",
-              content: textContent,
-              thinking: thinkingContent,
-              tool_calls: part.message.tool_calls,
+      async function streamChunk(chunk: StreamChunk) {
+        if (chunk.type === "toolCalls") {
+          self.addNativeMessage({
+            role: "assistant",
+            content: textContent,
+            thinking: thinkingContent,
+            tool_calls: chunk.toolCalls,
+          });
+
+          assistantMessage.setState("toolcall");
+
+          for (const tool of chunk.toolCalls) {
+            const summary = tools.find((mtool) => mtool.name === tool.function.name)?.summary;
+            assistantMessage.push({ kind: "toolcall", summary: summary ?? "", toolName: tool.function.name });
+
+            const result = await self.runModelTool(
+              selectedModel,
+              assistantMessage,
+              tools,
+              userMessage,
+              tool.function.name,
+              tool.function.arguments,
+            );
+
+            self.addNativeMessage({
+              role: "tool",
+              tool_name: tool.function.name,
+              content: JSON.stringify(result.data, null, 2),
             });
+          }
 
+          newTurn = true;
+          controller.abort();
+
+          return;
+        }
+
+        if (chunk.type === "thinking" && (currentTextSubmessage === null || !currentTextSubmessage.thinking)) {
+          self.setModelState("busy");
+          assistantMessage.setState("thinking");
+
+          currentTextSubmessage = assistantMessage.push({
+            kind: "text",
+            content: "",
+            thinking: true,
+            finished: false,
+            timeStart: Date.now(),
+            timeEnd: 0,
+          });
+        }
+
+        if (chunk.type === "text" && (!currentTextSubmessage || currentTextSubmessage.thinking)) {
+          self.setModelState("busy");
+          assistantMessage.setState("typing");
+
+          currentTextSubmessage = assistantMessage.push({
+            kind: "text",
+            content: "",
+            thinking: false,
+            finished: false,
+            timeStart: Date.now(),
+            timeEnd: 0,
+          });
+        }
+
+        if (!currentTextSubmessage) {
+          throw new Error("");
+        }
+
+        switch (chunk.type) {
+          case "text":
+            textContent += chunk.content;
+            if (capabilities.tools || !isToolCall) currentTextSubmessage.stream(chunk.content);
+            break;
+
+          case "thinking":
+            thinkingContent += chunk.content;
+            currentTextSubmessage.stream(chunk.content);
+            break;
+        }
+
+        if (!capabilities.tools) {
+          if (textContent.includes("<tool>") && !isToolCall) {
+            isToolCall = true;
             assistantMessage.setState("toolcall");
-
-            for (const tool of part.message.tool_calls) {
-              const summary = tools.find((mtool) => mtool.name === tool.function.name)?.summary;
-              assistantMessage.push({ kind: "toolcall", summary: summary ?? "", toolName: tool.function.name });
-
-              const result = await this.runModelTool(
-                selectedModel,
-                assistantMessage,
-                tools,
-                userMessage,
-                tool.function.name,
-                tool.function.arguments,
-              );
-
-              this.addNativeMessage({
-                role: "tool",
-                tool_name: tool.function.name,
-                content: JSON.stringify(result.data, null, 2),
-              });
-            }
-
-            newTurn = true;
-
-            continue turnLoop;
-          }
-
-          if (part.message.thinking && (currentTextSubmessage === null || !currentTextSubmessage.thinking)) {
-            this.setModelState("busy");
-            assistantMessage.setState("thinking");
-
-            currentTextSubmessage = assistantMessage.push({
-              kind: "text",
-              content: "",
-              thinking: true,
-              finished: false,
-              timeStart: Date.now(),
-              timeEnd: 0,
-            });
-          }
-
-          if (!part.message.thinking && (!currentTextSubmessage || currentTextSubmessage.thinking)) {
-            this.setModelState("busy");
-            assistantMessage.setState("typing");
-
-            currentTextSubmessage = assistantMessage.push({
-              kind: "text",
-              content: "",
-              thinking: false,
-              finished: false,
-              timeStart: Date.now(),
-              timeEnd: 0,
-            });
-          }
-
-          if (!currentTextSubmessage) {
-            throw new Error("");
-          }
-
-          textContent += part.message.content;
-          if (capabilities.tools || !isToolCall) currentTextSubmessage.stream(part.message.content);
-
-          if (part.message.thinking) {
-            thinkingContent += part.message.thinking;
-            currentTextSubmessage.stream(part.message.thinking);
-          }
-
-          if (!capabilities.tools) {
-            if (textContent.includes("<tool>") && !isToolCall) {
-              isToolCall = true;
-              assistantMessage.setState("toolcall");
-              currentTextSubmessage.removeToolCall();
-            }
+            currentTextSubmessage.removeToolCall();
           }
         }
+      }
+
+      const provider = await this.chatManager.providerManager.getProvider(selectedModel.provider);
+
+      if (!provider) {
+        throw new Error("invalid model");
+      }
+
+      try {
+        await provider.generate(
+          selectedModel.identifier,
+          this.nativeMessages(),
+          !capabilities.tools ? null : tools,
+          streamChunk,
+          this.providerController.signal,
+          useThinking,
+        );
       } catch (e) {
         error = e;
         errored = true;
@@ -656,7 +695,7 @@ ${JSON.stringify(result.data, null, 2)}
     assistantMessage.setState("finished");
     this.setModelState("idle");
     this.toolController = null;
-    this.ollamaController = null;
+    this.providerController = null;
   }
 
   private async loadChat(): Promise<void> {
@@ -689,15 +728,19 @@ class ChatManagerNewChat extends ChatManagerChat {
 
   public onCreate: (() => void) | null;
 
-  constructor(preferences: Accessor<UserPreferences>, setDefaultModel: (model: string) => void) {
-    super("", "", null, preferences);
+  constructor(
+    chatManager: ChatManager,
+    preferences: UserPreferences
+  ) {
+    super(chatManager, "", "", null, preferences);
 
     this.created = false;
     this.onCreate = null;
 
     createEffect(() => {
       if (!this.created) {
-        setDefaultModel(this.currentModel());
+        preferences.defaultModel = this.currentModel().identifier;
+        preferences.defaultProvider = this.currentModel().provider;
       }
     });
   }
@@ -711,7 +754,7 @@ class ChatManagerNewChat extends ChatManagerChat {
   }
 
   override sendMessage(
-    selectedModel: string,
+    selectedModel: ListedModel,
     userMessage: string,
     fileUploads: UserFile[],
     tools: ModelTool[],
@@ -729,23 +772,24 @@ export class ChatManager {
   public chats: Accessor<ChatManagerChat[]>;
   private setChats: Setter<ChatManagerChat[]>;
 
-  public availableModels: Accessor<string[]>;
-  private setAvailableModels: Setter<string[]>;
+  public availableModels: Accessor<ListedModel[]>;
+  private setAvailableModels: Setter<ListedModel[]>;
+
+  private preferences: UserPreferences;
 
   public currentChat: Accessor<ChatManagerChat>;
-
-  private preferences: Accessor<UserPreferences>;
-  private setPreferences: Setter<UserPreferences>;
+  public providerManager: ProviderManager;
 
   private static instance: ChatManager | null = null;
 
-  private constructor(preferences: Accessor<UserPreferences>, setPreferences: Setter<UserPreferences>) {
+  private constructor(preferences: UserPreferences) {
     this.preferences = preferences;
-    this.setPreferences = setPreferences;
 
     [this.chats, this.setChats] = createSignal<ChatManagerChat[]>([]);
     [this.chatId, this.setChatId] = createSignal<string | null>(null);
-    [this.availableModels, this.setAvailableModels] = createSignal<string[]>([]);
+    [this.availableModels, this.setAvailableModels] = createSignal<ListedModel[]>([]);
+
+    this.providerManager = ProviderManager.getInstance();
 
     this.currentChat = createMemo(() => {
       const chatId = this.chatId();
@@ -766,17 +810,15 @@ export class ChatManager {
     this.loadModels();
   }
 
-  public static getInstance(
-    preferences: Accessor<UserPreferences>,
-    setPreferences: Setter<UserPreferences>,
-  ): ChatManager {
-    if (this.instance === null) this.instance = new ChatManager(preferences, setPreferences);
+  public static getInstance(preferences: UserPreferences): ChatManager {
+    if (this.instance === null) this.instance = new ChatManager(preferences);
     return this.instance;
   }
 
   private async loadModels() {
-    const result = await ollama.list();
-    this.setAvailableModels(result.models.map((model) => model.name).sort());
+    const modelList = await this.providerManager.listModels();
+
+    this.setAvailableModels(modelList.sort((a, b) => a.identifier.localeCompare(b.identifier)));
   }
 
   private async loadChats() {
@@ -785,7 +827,19 @@ export class ChatManager {
       const loaded: ChatManagerChat[] = [];
 
       for (const chat of chats) {
-        loaded.push(runWithOwner(null, () => new ChatManagerChat(chat.id, chat.name, chat.model, this.preferences))!);
+        loaded.push(
+          runWithOwner(
+            null,
+            () =>
+              new ChatManagerChat(
+                this,
+                chat.id,
+                chat.name,
+                { identifier: chat.model, provider: chat.provider },
+                this.preferences,
+              ),
+          )!,
+        );
       }
 
       this.setChats(loaded);
@@ -827,7 +881,12 @@ export class ChatManager {
   }
 
   addChat(chat: ChatManagerChat) {
-    serializeChatList.addChat({ id: chat.id, model: chat.currentModel(), name: chat.name() });
+    serializeChatList.addChat({
+      id: chat.id,
+      model: chat.currentModel().identifier,
+      provider: chat.currentModel().provider,
+      name: chat.name(),
+    });
     this.setChats([...this.chats(), chat]);
   }
 
@@ -835,13 +894,7 @@ export class ChatManager {
     const found = this.chats().find((chat) => chat.id === id);
 
     if (id === null || found === undefined) {
-      const temporary = runWithOwner(
-        null,
-        () =>
-          new ChatManagerNewChat(this.preferences, (newModel) =>
-            this.setPreferences((current) => ({ ...current, defaultModel: newModel })),
-          ),
-      )!;
+      const temporary = runWithOwner(null, () => new ChatManagerNewChat(this, this.preferences))!;
 
       temporary.onCreate = () => {
         this.addChat(temporary);

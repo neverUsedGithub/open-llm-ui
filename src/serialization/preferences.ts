@@ -18,6 +18,13 @@ export async function loadPreferences(): Promise<UserPreferences> {
   return preferences as UserPreferences;
 }
 
+export async function savePreference<T extends keyof UserPreferences>(
+  name: T,
+  value: UserPreferences[T],
+): Promise<void> {
+  await database.put("preferences", { name, value });
+}
+
 export async function savePreferences(preferences: UserPreferences): Promise<void> {
   for (const name in preferences) {
     await database.put("preferences", {
