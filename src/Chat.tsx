@@ -248,7 +248,7 @@ function SubMessageView(props: { subMessage: SubChatMessage; messageState: ChatM
             }
 
             if (elem.parentElement && (elem.tagName === "EQUATION-BLOCK" || elem.tagName === "EQUATION-INLINE")) {
-              const display = document.createElement("div");
+              const display = document.createElement(elem.tagName === "EQUATION-BLOCK" ? "div" : "span");
               elem.parentElement.insertBefore(display, elem);
               elem.style.display = "none";
 

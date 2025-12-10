@@ -177,7 +177,7 @@ export default function App() {
   window.database = database;
 
   return (
-    <div class={cn("relative flex", preferences.sidebarExpanded && "pl-[48px]")}>
+    <div class={cn("relative flex", preferences.sidebarExpanded && "pl-[48px] sm:pl-0")}>
       <Show when={preferences.sidebarExpanded}>
         <SidebarExpanded chatManager={chatManager} preferences={preferences} />
       </Show>
