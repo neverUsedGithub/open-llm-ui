@@ -8,7 +8,11 @@ export class OllamaProvider extends ModelProvider {
   constructor() {
     super();
 
-    this.ollama = new Ollama();
+    const search = new URLSearchParams(window.location.search);
+
+    this.ollama = new Ollama({
+      host: search.get("ollama_url") ?? "http://localhost:11434",
+    });
   }
 
   override async listModels(): Promise<string[]> {
