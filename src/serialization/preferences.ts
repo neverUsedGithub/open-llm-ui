@@ -7,15 +7,10 @@ export interface PreferenceEntry {
   value: any;
 }
 
-export async function loadPreferences(): Promise<UserPreferences> {
-  const preferences: Record<string, any> = basePreferences;
-  const saved = await database.queryAll<PreferenceEntry>("preferences");
-
-  for (const entry of saved) {
-    preferences[entry.name] = entry.value;
-  }
-
-  return preferences as UserPreferences;
+export async function loadPreference<T extends keyof UserPreferences>(key: T): Promise<UserPreferences[T] | null> {
+  const result = await database.query<PreferenceEntry>("preferences", key);
+  if (result) return result.value;
+  return null;
 }
 
 export async function savePreference<T extends keyof UserPreferences>(
@@ -23,13 +18,4 @@ export async function savePreference<T extends keyof UserPreferences>(
   value: UserPreferences[T],
 ): Promise<void> {
   await database.put("preferences", { name, value });
-}
-
-export async function savePreferences(preferences: UserPreferences): Promise<void> {
-  for (const name in preferences) {
-    await database.put("preferences", {
-      name: name,
-      value: preferences[name as keyof UserPreferences] as any,
-    });
-  }
 }

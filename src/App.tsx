@@ -23,7 +23,7 @@ import { Dropdown } from "./components/Dropdown";
 import { cn } from "./util/cn";
 import { Combobox } from "./components/Combobox";
 import { Button } from "./components/Button";
-import { loadPreferences, savePreference } from "./serialization/preferences";
+import { loadPreference, savePreference } from "./serialization/preferences";
 import type { UserPreferences } from "./types";
 import { database } from "./indexeddb";
 import { basePreferences } from "./util/constant";
@@ -157,20 +157,24 @@ function usePreferences(): UserPreferences {
     });
   }
 
-  loadPreferences()
-    .then((preferences) => {
-      for (const key in reactivePreferences) {
-        if (key in preferences) {
-          reactivePreferences[key] = (preferences as unknown as Record<string, unknown>)[key];
-        } else {
-          savePreference(
-            key as keyof UserPreferences,
-            reactivePreferences[key] as UserPreferences[keyof UserPreferences],
-          );
-        }
+  async function loadPreferences() {
+    for (const key in reactivePreferences) {
+      const saved = await loadPreference(key as keyof UserPreferences);
+
+      if (saved !== null) {
+        reactivePreferences[key] = saved;
+      } else {
+        savePreference(
+          key as keyof UserPreferences,
+          reactivePreferences[key] as UserPreferences[keyof UserPreferences],
+        );
       }
-    })
-    .finally(() => (loaded = true));
+    }
+
+    loaded = true;
+  }
+
+  loadPreferences();
 
   return reactivePreferences as unknown as UserPreferences;
 }
