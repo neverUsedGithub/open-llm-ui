@@ -159,8 +159,15 @@ function usePreferences(): UserPreferences {
 
   loadPreferences()
     .then((preferences) => {
-      for (const key in preferences) {
-        reactivePreferences[key] = (preferences as unknown as Record<string, unknown>)[key];
+      for (const key in reactivePreferences) {
+        if (key in preferences) {
+          reactivePreferences[key] = (preferences as unknown as Record<string, unknown>)[key];
+        } else {
+          savePreference(
+            key as keyof UserPreferences,
+            reactivePreferences[key] as UserPreferences[keyof UserPreferences],
+          );
+        }
       }
     })
     .finally(() => (loaded = true));
