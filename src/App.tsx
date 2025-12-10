@@ -1,14 +1,4 @@
-import {
-  createEffect,
-  createSignal,
-  For,
-  getOwner,
-  runWithOwner,
-  Show,
-  type Accessor,
-  type JSX,
-  type Setter,
-} from "solid-js";
+import { createEffect, createSignal, For, Show, type JSX } from "solid-js";
 import { ChatView } from "./Chat";
 
 import ChevronRightIcon from "lucide-solid/icons/chevron-right";
@@ -164,7 +154,7 @@ function usePreferences(): UserPreferences {
       if (saved !== null) {
         reactivePreferences[key] = saved;
       } else {
-        savePreference(
+        await savePreference(
           key as keyof UserPreferences,
           reactivePreferences[key] as UserPreferences[keyof UserPreferences],
         );

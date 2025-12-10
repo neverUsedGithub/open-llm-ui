@@ -1,6 +1,5 @@
 import { database } from "@/indexeddb";
 import type { UserPreferences } from "@/types";
-import { basePreferences } from "@/util/constant";
 
 export interface PreferenceEntry {
   name: string;
