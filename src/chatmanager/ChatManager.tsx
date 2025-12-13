@@ -613,10 +613,12 @@ export class ChatManagerChat {
           useThinking,
         );
       } catch (e) {
-        error = e;
-        errored = true;
-        newTurn = false;
-        console.error(e);
+        if (!(e instanceof DOMException) || e.name !== "AbortError") {
+          error = e;
+          errored = true;
+          newTurn = false;
+          console.error(e);
+        }
       }
 
       if (!capabilities.tools && !errored && isToolCall) {

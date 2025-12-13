@@ -9,7 +9,7 @@ export abstract class ModelProvider {
     identifier: string,
     messages: NativeChatMessage[],
     tools: ModelTool[] | null,
-    stream: (chunk: StreamChunk) => void,
+    stream: (chunk: StreamChunk) => Promise<void>,
     signal: AbortSignal,
     thinking: boolean | "low" | "medium" | "high" | undefined,
   ): Promise<void>;

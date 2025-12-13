@@ -43,7 +43,7 @@ export class OllamaProvider extends ModelProvider {
     identifier: string,
     messages: NativeChatMessage[],
     tools: ModelTool[] | null,
-    stream: (chunk: StreamChunk) => void,
+    stream: (chunk: StreamChunk) => Promise<void>,
     signal: AbortSignal,
     thinking: boolean | "low" | "medium" | "high" | undefined,
   ): Promise<void> {
@@ -62,15 +62,15 @@ export class OllamaProvider extends ModelProvider {
       signal.throwIfAborted();
 
       if (part.message.tool_calls) {
-        stream({ type: "toolCalls", toolCalls: part.message.tool_calls });
+        await stream({ type: "toolCalls", toolCalls: part.message.tool_calls });
       }
 
       if (part.message.content) {
-        stream({ type: "text", content: part.message.content });
+        await stream({ type: "text", content: part.message.content });
       }
 
       if (part.message.thinking) {
-        stream({ type: "thinking", content: part.message.thinking });
+        await stream({ type: "thinking", content: part.message.thinking });
       }
     }
   }
