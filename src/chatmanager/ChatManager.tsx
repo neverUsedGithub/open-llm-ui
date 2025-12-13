@@ -472,31 +472,11 @@ export class ChatManagerChat {
     do {
       newTurn = false;
 
-      // const runningModels = await ollama.ps();
-
-      // if (!runningModels.models.find((model) => model.model === selectedModel)) {
       this.setModelState("loading");
       assistantMessage.setState("loading");
-      // }
 
       const controller = new AbortController();
       this.providerController = controller;
-
-      // ({
-      //   messages: this.nativeMessages(),
-      //   model: selectedModel,
-      //   options: {
-      //     num_ctx: 16_000,
-      //   },
-      //   tools: capabilities.tools
-      //     ? tools.map((tool) => ({
-      //         type: "function",
-      //         function: tool,
-      //       }))
-      //     : undefined,
-      //   stream: true,
-      //   think: useThinking,
-      // });
 
       const self = this;
 
